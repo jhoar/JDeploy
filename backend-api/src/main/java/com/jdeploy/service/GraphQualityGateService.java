@@ -30,8 +30,14 @@ public class GraphQualityGateService {
     public QualityGateReport evaluateGraph() {
         List<String> orphanDeployments = List.copyOf(neo4jClient.query("""
                 MATCH (d:DeploymentInstance)
-                WHERE NOT (d)-[:TARGETS]->(:HardwareNode)
-                   OR NOT (d)-[:TARGETS]->(:ExecutionEnvironment)
+                WHERE NOT EXISTS {
+                    MATCH (d)-[rel]->(:HardwareNode)
+                    WHERE type(rel) = 'TARGETS'
+                }
+                   OR NOT EXISTS {
+                    MATCH (d)-[rel]->(:ExecutionEnvironment)
+                    WHERE type(rel) = 'TARGETS'
+                }
                 RETURN d.deploymentKey AS value
                 ORDER BY value
                 """)
