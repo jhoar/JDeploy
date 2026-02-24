@@ -9,6 +9,7 @@ import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationRegistry;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Objects;
@@ -36,7 +37,7 @@ public class DiagramGenerationService {
                 .observe(() -> {
                     String plantUml = buildPlantUml(manifest);
                     String artifactId = "deployment-topology-" + Instant.now().toEpochMilli() + ".puml";
-                    ArtifactMetadata metadata = artifactStorage.create(artifactId, plantUml);
+                    ArtifactMetadata metadata = artifactStorage.create(artifactId, plantUml, Duration.ofDays(7));
                     artifactGenerationCounter.increment();
                     return metadata;
                 });

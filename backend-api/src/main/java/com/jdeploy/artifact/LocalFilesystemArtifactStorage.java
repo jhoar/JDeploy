@@ -10,11 +10,14 @@ import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 
 @Component
 public class LocalFilesystemArtifactStorage implements ArtifactStorage {
+
+    private static final String RETENTION_SUFFIX = ".retention";
 
     private final Path basePath;
 
@@ -23,35 +26,66 @@ public class LocalFilesystemArtifactStorage implements ArtifactStorage {
     }
 
     @Override
-    public ArtifactMetadata create(String artifactName, String content) {
+    public ArtifactMetadata create(String artifactName, String content, Duration retention) {
         Objects.requireNonNull(artifactName, "artifactName must not be null");
         Objects.requireNonNull(content, "content must not be null");
+        Objects.requireNonNull(retention, "retention must not be null");
+
         try {
             Files.createDirectories(basePath);
-            Path artifactPath = basePath.resolve(artifactName);
+            Path artifactPath = resolveArtifactPath(artifactName);
             Files.writeString(artifactPath, content, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-            return metadataFromPath(artifactPath);
+
+            Instant retentionUntil = Instant.now().plus(retention);
+            Files.writeString(retentionPath(artifactPath), retentionUntil.toString(), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            return metadataFromPath(artifactPath, retentionUntil);
         } catch (IOException ex) {
             throw new IllegalStateException("Failed to write artifact to filesystem", ex);
         }
     }
 
     @Override
-    public ArtifactMetadata readMetadata(String artifactId) {
+    public StoredArtifact read(String artifactId) {
         Objects.requireNonNull(artifactId, "artifactId must not be null");
-        Path artifactPath = basePath.resolve(artifactId);
+        Path artifactPath = resolveArtifactPath(artifactId);
         if (!Files.exists(artifactPath)) {
             throw new IllegalArgumentException("Artifact does not exist: " + artifactId);
         }
-        return metadataFromPath(artifactPath);
+
+        try {
+            String content = Files.readString(artifactPath);
+            return new StoredArtifact(metadataFromPath(artifactPath, readRetention(artifactPath)), content);
+        } catch (IOException ex) {
+            throw new IllegalStateException("Failed to read artifact " + artifactId, ex);
+        }
+    }
+
+    @Override
+    public List<ArtifactMetadata> list() {
+        if (!Files.isDirectory(basePath)) {
+            return List.of();
+        }
+
+        try (var paths = Files.list(basePath)) {
+            return paths
+                    .filter(Files::isRegularFile)
+                    .filter(path -> !path.getFileName().toString().endsWith(RETENTION_SUFFIX))
+                    .map(path -> metadataFromPath(path, readRetention(path)))
+                    .sorted(Comparator.comparing(ArtifactMetadata::artifactId))
+                    .toList();
+        } catch (IOException ex) {
+            throw new IllegalStateException("Failed to list artifacts", ex);
+        }
     }
 
     @Override
     public boolean delete(String artifactId) {
         Objects.requireNonNull(artifactId, "artifactId must not be null");
-        Path artifactPath = basePath.resolve(artifactId);
+        Path artifactPath = resolveArtifactPath(artifactId);
         try {
-            return Files.deleteIfExists(artifactPath);
+            boolean deleted = Files.deleteIfExists(artifactPath);
+            Files.deleteIfExists(retentionPath(artifactPath));
+            return deleted;
         } catch (IOException ex) {
             throw new IllegalStateException("Failed to delete artifact " + artifactId, ex);
         }
@@ -68,23 +102,51 @@ public class LocalFilesystemArtifactStorage implements ArtifactStorage {
         }
 
         try (var paths = Files.list(basePath)) {
-            paths.filter(Files::isRegularFile).forEach(path -> {
-                try {
-                    Instant lastModified = Files.getLastModifiedTime(path).toInstant();
-                    if (lastModified.isBefore(cutoff) && Files.deleteIfExists(path)) {
-                        deleted.add(path.getFileName().toString());
-                    }
-                } catch (IOException ex) {
-                    throw new IllegalStateException("Failed to expire artifact " + path.getFileName(), ex);
-                }
-            });
+            paths.filter(Files::isRegularFile)
+                    .filter(path -> !path.getFileName().toString().endsWith(RETENTION_SUFFIX))
+                    .forEach(path -> {
+                        try {
+                            Instant lastModified = Files.getLastModifiedTime(path).toInstant();
+                            if (lastModified.isBefore(cutoff) && Files.deleteIfExists(path)) {
+                                Files.deleteIfExists(retentionPath(path));
+                                deleted.add(path.getFileName().toString());
+                            }
+                        } catch (IOException ex) {
+                            throw new IllegalStateException("Failed to expire artifact " + path.getFileName(), ex);
+                        }
+                    });
         } catch (IOException ex) {
             throw new IllegalStateException("Failed to list artifacts for expiration", ex);
         }
         return deleted;
     }
 
-    private ArtifactMetadata metadataFromPath(Path path) {
+    private Path resolveArtifactPath(String artifactId) {
+        Path artifactPath = basePath.resolve(artifactId).normalize();
+        if (!artifactPath.startsWith(basePath.normalize())) {
+            throw new IllegalArgumentException("Artifact id is invalid: " + artifactId);
+        }
+        return artifactPath;
+    }
+
+    private Path retentionPath(Path artifactPath) {
+        return artifactPath.resolveSibling(artifactPath.getFileName() + RETENTION_SUFFIX);
+    }
+
+    private Instant readRetention(Path artifactPath) {
+        Path retentionPath = retentionPath(artifactPath);
+        if (!Files.exists(retentionPath)) {
+            return null;
+        }
+
+        try {
+            return Instant.parse(Files.readString(retentionPath).trim());
+        } catch (IOException ex) {
+            throw new IllegalStateException("Failed reading retention for artifact " + artifactPath.getFileName(), ex);
+        }
+    }
+
+    private ArtifactMetadata metadataFromPath(Path path, Instant retentionUntil) {
         try {
             var attrs = Files.readAttributes(path, java.nio.file.attribute.BasicFileAttributes.class);
             return new ArtifactMetadata(
@@ -92,7 +154,8 @@ public class LocalFilesystemArtifactStorage implements ArtifactStorage {
                     path,
                     attrs.size(),
                     attrs.creationTime().toInstant(),
-                    attrs.lastModifiedTime().toInstant()
+                    attrs.lastModifiedTime().toInstant(),
+                    retentionUntil
             );
         } catch (IOException ex) {
             throw new IllegalStateException("Failed reading metadata for artifact " + path.getFileName(), ex);
