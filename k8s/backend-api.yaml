@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jdeploy-backend-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jdeploy-backend-api
+  template:
+    metadata:
+      labels:
+        app: jdeploy-backend-api
+    spec:
+      containers:
+        - name: backend-api
+          image: jdeploy/backend-api:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: NEO4J_URI
+              value: bolt://neo4j:7687
+            - name: NEO4J_USERNAME
+              value: neo4j
+            - name: NEO4J_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: jdeploy-secrets
+                  key: neo4j-password
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jdeploy-backend-api
+spec:
+  selector:
+    app: jdeploy-backend-api
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP

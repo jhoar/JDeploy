@@ -3,6 +3,10 @@ package com.jdeploy.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.jdeploy.service.dto.DeploymentManifestDto;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.data.neo4j.core.Neo4jClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,17 +22,27 @@ public class ManifestIngestionService {
 
     private final ObjectMapper yamlMapper;
     private final Neo4jClient neo4jClient;
+    private final Counter ingestionErrorCounter;
+    private final ObservationRegistry observationRegistry;
 
-    public ManifestIngestionService(Neo4jClient neo4jClient) {
+    public ManifestIngestionService(Neo4jClient neo4jClient,
+                                    MeterRegistry meterRegistry,
+                                    ObservationRegistry observationRegistry) {
         this.neo4jClient = Objects.requireNonNull(neo4jClient, "neo4jClient must not be null");
+        this.observationRegistry = Objects.requireNonNull(observationRegistry, "observationRegistry must not be null");
+        this.ingestionErrorCounter = Counter.builder("jdeploy.ingestion.errors")
+                .description("Number of manifest ingestion and parsing errors")
+                .register(meterRegistry);
         this.yamlMapper = new ObjectMapper(new YAMLFactory());
     }
 
     public DeploymentManifestDto parseManifest(String yamlText) {
         Objects.requireNonNull(yamlText, "yamlText must not be null");
         try {
-            return yamlMapper.readValue(yamlText, DeploymentManifestDto.class);
-        } catch (IOException ex) {
+            return Observation.createNotStarted("jdeploy.manifest.parse", observationRegistry)
+                    .observeChecked(() -> yamlMapper.readValue(yamlText, DeploymentManifestDto.class));
+        } catch (Exception ex) {
+            ingestionErrorCounter.increment();
             throw new IllegalArgumentException("Unable to parse deployment manifest yaml", ex);
         }
     }
@@ -38,6 +52,7 @@ public class ManifestIngestionService {
         try {
             return parseManifest(Files.readString(manifestPath));
         } catch (IOException ex) {
+            ingestionErrorCounter.increment();
             throw new IllegalArgumentException("Unable to read deployment manifest file", ex);
         }
     }
@@ -46,6 +61,16 @@ public class ManifestIngestionService {
     public void synchronize(DeploymentManifestDto manifest) {
         Objects.requireNonNull(manifest, "manifest must not be null");
 
+        try {
+            Observation.createNotStarted("jdeploy.manifest.synchronize", observationRegistry)
+                    .observe(() -> synchronizeManifest(manifest));
+        } catch (RuntimeException ex) {
+            ingestionErrorCounter.increment();
+            throw ex;
+        }
+    }
+
+    private void synchronizeManifest(DeploymentManifestDto manifest) {
         for (DeploymentManifestDto.ExecutionEnvironmentDto environment : manifest.environments()) {
             neo4jClient.query("""
                     MERGE (e:ExecutionEnvironment {name: $name})

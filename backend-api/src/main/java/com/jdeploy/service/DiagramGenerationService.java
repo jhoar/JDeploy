@@ -3,6 +3,10 @@ package com.jdeploy.service;
 import com.jdeploy.artifact.ArtifactMetadata;
 import com.jdeploy.artifact.ArtifactStorage;
 import com.jdeploy.service.dto.DeploymentManifestDto;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -12,16 +16,29 @@ import java.util.Objects;
 public class DiagramGenerationService {
 
     private final ArtifactStorage artifactStorage;
+    private final Counter artifactGenerationCounter;
+    private final ObservationRegistry observationRegistry;
 
-    public DiagramGenerationService(ArtifactStorage artifactStorage) {
+    public DiagramGenerationService(ArtifactStorage artifactStorage,
+                                    MeterRegistry meterRegistry,
+                                    ObservationRegistry observationRegistry) {
         this.artifactStorage = Objects.requireNonNull(artifactStorage, "artifactStorage must not be null");
+        this.observationRegistry = Objects.requireNonNull(observationRegistry, "observationRegistry must not be null");
+        this.artifactGenerationCounter = Counter.builder("jdeploy.artifacts.generated")
+                .description("Number of generated deployment diagram artifacts")
+                .register(meterRegistry);
     }
 
     public ArtifactMetadata generateDeploymentDiagram(DeploymentManifestDto manifest) {
         Objects.requireNonNull(manifest, "manifest must not be null");
-        String plantUml = buildPlantUml(manifest);
-        String artifactId = "deployment-" + Instant.now().toEpochMilli() + ".puml";
-        return artifactStorage.create(artifactId, plantUml);
+        return Observation.createNotStarted("jdeploy.artifact.generate", observationRegistry)
+                .observe(() -> {
+                    String plantUml = buildPlantUml(manifest);
+                    String artifactId = "deployment-" + Instant.now().toEpochMilli() + ".puml";
+                    ArtifactMetadata metadata = artifactStorage.create(artifactId, plantUml);
+                    artifactGenerationCounter.increment();
+                    return metadata;
+                });
     }
 
     public String buildPlantUml(DeploymentManifestDto manifest) {

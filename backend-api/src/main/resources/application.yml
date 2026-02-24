@@ -11,7 +11,12 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,prometheus
+        include: health,info,metrics,prometheus
+  tracing:
+    enabled: true
+  observations:
+    annotations:
+      enabled: true
 
 springdoc:
   swagger-ui:
