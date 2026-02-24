@@ -9,7 +9,9 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 
 @Service
@@ -60,16 +62,45 @@ public class DiagramGenerationService {
         builder.append("skinparam shadowing false\n");
         builder.append("left to right direction\n\n");
 
+        Map<String, DeploymentManifestDto.ClusterDto> clustersByNode = new HashMap<>();
+        for (DeploymentManifestDto.ClusterDto cluster : manifest.clusters()) {
+            for (String hostname : cluster.nodes()) {
+                clustersByNode.put(hostname, cluster);
+            }
+        }
+
         for (DeploymentManifestDto.SubnetDto subnet : manifest.subnets()) {
             builder.append("frame \"").append(subnet.cidr()).append(" [VLAN ").append(subnet.vlan())
                     .append("]\" as subnet_").append(alias(subnet.cidr())).append(" {\n");
+            Map<String, StringBuilder> nodesByCluster = new HashMap<>();
             for (DeploymentManifestDto.HardwareNodeDto node : subnet.nodes()) {
                 String nodeAlias = nodeAlias(node.hostname());
-                builder.append("  ").append(nodeKeyword(node.type())).append(" \"")
+                StringBuilder nodeLine = new StringBuilder();
+                nodeLine.append("    ").append(nodeKeyword(node.type())).append(" \"")
                         .append(node.hostname()).append("\\n")
                         .append(node.ipAddress()).append("\" as ")
                         .append(nodeAlias)
                         .append(" <<").append(nodeStereotype(node.type())).append(">>\n");
+
+                DeploymentManifestDto.ClusterDto cluster = clustersByNode.get(node.hostname());
+                if (cluster == null) {
+                    builder.append(nodeLine);
+                    continue;
+                }
+
+                String clusterKey = cluster.type() + ":" + cluster.name();
+                nodesByCluster.computeIfAbsent(clusterKey,
+                                key -> new StringBuilder("  package \"")
+                                        .append(cluster.name())
+                                        .append(" [")
+                                        .append(cluster.type())
+                                        .append("]\" as cluster_")
+                                        .append(alias(cluster.name()))
+                                        .append(" {\n"))
+                        .append(nodeLine);
+            }
+            for (StringBuilder clusterNodes : nodesByCluster.values()) {
+                builder.append(clusterNodes).append("  }\n");
             }
             builder.append("}\n\n");
         }
@@ -93,6 +124,12 @@ public class DiagramGenerationService {
                     builder.append("  ").append(artifactAlias).append(" --> ")
                             .append(nodeAlias(deployment.hostname()))
                             .append(" : deploy@").append(deployment.environment()).append("\n");
+                    if (deployment.namespace() != null && !deployment.namespace().isBlank()) {
+                        builder.append("  note right of ").append(nodeAlias(deployment.hostname()))
+                                .append(" : ns/").append(deployment.namespace())
+                                .append(" in ").append(deployment.cluster())
+                                .append("\n");
+                    }
                 }
             }
             builder.append("}\n\n");

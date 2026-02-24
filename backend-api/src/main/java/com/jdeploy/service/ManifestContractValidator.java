@@ -28,6 +28,8 @@ public class ManifestContractValidator {
 
         Set<String> hostnames = new HashSet<>();
         Set<String> ips = new HashSet<>();
+        Set<String> clusterNames = new HashSet<>();
+        Set<String> namespaces = new HashSet<>();
         for (DeploymentManifestDto.SubnetDto subnet : manifest.subnets()) {
             for (DeploymentManifestDto.HardwareNodeDto node : subnet.nodes()) {
                 if (!hostnames.add(node.hostname())) {
@@ -35,6 +37,22 @@ public class ManifestContractValidator {
                 }
                 if (!ips.add(node.ipAddress())) {
                     throw new PreconditionViolationException("Duplicate IP address detected: " + node.ipAddress());
+                }
+            }
+        }
+
+        for (DeploymentManifestDto.ClusterDto cluster : manifest.clusters()) {
+            if (!clusterNames.add(cluster.name())) {
+                throw new PreconditionViolationException("Conflicting cluster identifier: " + cluster.name());
+            }
+            for (String hostname : cluster.nodes()) {
+                if (!hostnames.contains(hostname)) {
+                    throw new PreconditionViolationException("Missing cluster member host: " + hostname);
+                }
+            }
+            for (String namespace : cluster.namespaces()) {
+                if (!namespaces.add(namespace)) {
+                    throw new PreconditionViolationException("Conflicting kubernetes namespace identifier: " + namespace);
                 }
             }
         }
@@ -57,6 +75,17 @@ public class ManifestContractValidator {
                     }
                     if (!hostnames.contains(deployment.hostname())) {
                         throw new PreconditionViolationException("Missing target host: " + deployment.hostname());
+                    }
+                    if (deployment.cluster() != null && !deployment.cluster().isBlank() && !clusterNames.contains(deployment.cluster())) {
+                        throw new PreconditionViolationException("Missing target cluster: " + deployment.cluster());
+                    }
+                    if (deployment.namespace() != null && !deployment.namespace().isBlank()) {
+                        if (deployment.cluster() == null || deployment.cluster().isBlank()) {
+                            throw new PreconditionViolationException("Namespace-scoped deployments must define a cluster: " + deployment.namespace());
+                        }
+                        if (!namespaces.contains(deployment.namespace())) {
+                            throw new PreconditionViolationException("Missing target namespace: " + deployment.namespace());
+                        }
                     }
                 }
             }

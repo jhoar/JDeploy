@@ -37,6 +37,7 @@ class DiagramGenerationServiceTest {
         String uml = service.buildPlantUml(manifest);
 
         assertTrue(uml.contains("frame \"10.0.0.0/24 [VLAN app]\""));
+        assertTrue(uml.contains("package \"prod-k8s [KUBERNETES]\""));
         assertTrue(uml.contains("<<physical>>"));
         assertTrue(uml.contains("<<vm>>"));
         assertTrue(uml.contains("<<grid>>"));
@@ -94,12 +95,15 @@ class DiagramGenerationServiceTest {
                                 )
                         )
                 ),
+                List.of(
+                        new DeploymentManifestDto.ClusterDto("prod-k8s", "KUBERNETES", List.of("k8s01", "app01"), List.of("payments"))
+                ),
                 List.of(new DeploymentManifestDto.ExecutionEnvironmentDto("prod", "PRODUCTION")),
                 List.of(new DeploymentManifestDto.SoftwareSystemDto(
                         "Payments",
                         List.of(new DeploymentManifestDto.SoftwareComponentDto(
                                 "payments-api", "1.2.3",
-                                List.of(new DeploymentManifestDto.DeploymentTargetDto("prod", "app01"))
+                                List.of(new DeploymentManifestDto.DeploymentTargetDto("prod", "app01", "prod-k8s", "payments"))
                         ))
                 )),
                 List.of(new DeploymentManifestDto.NetworkLinkDto("app01", "sw01", 1000, 1))

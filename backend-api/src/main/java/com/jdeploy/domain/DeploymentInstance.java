@@ -16,18 +16,22 @@ public class DeploymentInstance {
 
     private String deploymentKey;
 
-    @Relationship(type = "TARGET_ENVIRONMENT")
+    @Relationship(type = "TARGETS")
     private ExecutionEnvironment targetEnvironment;
 
-    @Relationship(type = "TARGET_NODE")
+    @Relationship(type = "TARGETS")
     private HardwareNode targetNode;
+
+    @Relationship(type = "TARGETS")
+    private KubernetesNamespace targetNamespace;
 
     DeploymentInstance() {
     }
 
-    public DeploymentInstance(ExecutionEnvironment targetEnvironment, HardwareNode targetNode) {
+    public DeploymentInstance(ExecutionEnvironment targetEnvironment, HardwareNode targetNode, KubernetesNamespace targetNamespace) {
         this.targetEnvironment = requireNonNull(targetEnvironment, "targetEnvironment");
         this.targetNode = requireNonNull(targetNode, "targetNode");
+        this.targetNamespace = targetNamespace;
         this.deploymentKey = this.targetEnvironment.getName() + "@" + this.targetNode.getHostname();
         if (this.deploymentKey.isBlank()) {
             throw new PostconditionViolationException("DeploymentInstance must produce a non-blank deployment key");
@@ -48,6 +52,10 @@ public class DeploymentInstance {
 
     public HardwareNode getTargetNode() {
         return targetNode;
+    }
+
+    public KubernetesNamespace getTargetNamespace() {
+        return targetNamespace;
     }
 
     private static <T> T requireNonNull(T value, String field) {

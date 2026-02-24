@@ -42,7 +42,7 @@ class DomainInvariantsTest {
         ExecutionEnvironment env = new ExecutionEnvironment("prod", ExecutionEnvironment.EnvironmentType.PRODUCTION);
         HardwareNode node = new HardwareNode(HardwareNode.NodeType.VIRTUAL_MACHINE, "node-1", "10.0.0.10", Set.of("app"));
 
-        DeploymentInstance deployment = new DeploymentInstance(env, node);
+        DeploymentInstance deployment = new DeploymentInstance(env, node, null);
 
         assertEquals("prod@node-1", deployment.getDeploymentKey());
     }
