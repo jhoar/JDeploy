@@ -79,7 +79,7 @@ public class TopologyQueryController {
     @PreAuthorize("hasAuthority('" + ApiRoles.READ_ONLY + "')")
     @Operation(summary = "List all nodes in a cluster")
     public List<ClusterNodeView> nodesInCluster(@PathVariable String clusterName) {
-        return neo4jClient.query("""
+        return List.copyOf(neo4jClient.query("""
                 MATCH (c)-[:HAS_NODE]->(n:HardwareNode)
                 WHERE c.name = $clusterName
                   AND ('GridCluster' IN labels(c) OR 'KubernetesCluster' IN labels(c))
@@ -93,14 +93,14 @@ public class TopologyQueryController {
                         record.get("clusterName").asString(),
                         record.get("hostname").asString(),
                         record.get("ipAddress").asString()))
-                .all();
+                .all());
     }
 
     @GetMapping("/clusters/{clusterName}/subnets/{subnetId}/nodes")
     @PreAuthorize("hasAuthority('" + ApiRoles.READ_ONLY + "')")
     @Operation(summary = "List cluster nodes scoped to a subnet")
     public List<ClusterNodeView> nodesInClusterAndSubnet(@PathVariable String clusterName, @PathVariable String subnetId) {
-        return neo4jClient.query("""
+        return List.copyOf(neo4jClient.query("""
                 MATCH (c)-[:HAS_NODE]->(n:HardwareNode)
                 MATCH (:Subnet {cidr: $subnetId})-[:CONTAINS_NODE]->(n)
                 WHERE c.name = $clusterName
@@ -115,7 +115,7 @@ public class TopologyQueryController {
                         record.get("clusterName").asString(),
                         record.get("hostname").asString(),
                         record.get("ipAddress").asString()))
-                .all();
+                .all());
     }
 
     @GetMapping("/diagrams/system/{systemId}")
@@ -164,8 +164,16 @@ public class TopologyQueryController {
                 .stream()
                 .map(row -> new SystemImpactView(
                         String.valueOf(row.get("systemName")),
-                        (List<String>) row.getOrDefault("impactedComponents", List.of())))
+                        toStringList(row.get("impactedComponents"))))
                 .toList();
+    }
+
+
+    private static List<String> toStringList(Object value) {
+        if (value instanceof java.util.Collection<?> collection) {
+            return collection.stream().map(String::valueOf).toList();
+        }
+        return List.of();
     }
 
     @Schema(name = "DeploymentView")

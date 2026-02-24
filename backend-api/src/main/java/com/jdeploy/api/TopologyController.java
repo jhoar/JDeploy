@@ -32,44 +32,44 @@ public class TopologyController {
     @GetMapping("/systems")
     @PreAuthorize("hasAnyAuthority('" + ApiRoles.READ_ONLY + "','" + ApiRoles.EDITOR + "','" + ApiRoles.ADMIN + "')")
     public List<SystemView> systems() {
-        return neo4jClient.query("""
+        return List.copyOf(neo4jClient.query("""
                 MATCH (s:SoftwareSystem)
                 OPTIONAL MATCH (s)-[:HAS_COMPONENT]->(c:SoftwareComponent)
                 RETURN s.name AS name, count(DISTINCT c) AS componentCount
                 ORDER BY name
-                """).fetchAs(SystemView.class).mappedBy((t, r) -> new SystemView(r.get("name").asString(), r.get("componentCount").asInt())).all();
+                """).fetchAs(SystemView.class).mappedBy((t, r) -> new SystemView(r.get("name").asString(), r.get("componentCount").asInt())).all());
     }
 
     @GetMapping("/hardware-nodes")
     @PreAuthorize("hasAnyAuthority('" + ApiRoles.READ_ONLY + "','" + ApiRoles.EDITOR + "','" + ApiRoles.ADMIN + "')")
     public List<NodeView> hardwareNodes() {
-        return neo4jClient.query("""
+        return List.copyOf(neo4jClient.query("""
                 MATCH (n:HardwareNode)
                 OPTIONAL MATCH (s:Subnet)-[:CONTAINS_NODE]->(n)
                 RETURN n.hostname as hostname, n.ipAddress as ipAddress, n.type as type, s.cidr as subnetCidr
                 ORDER BY hostname
                 """).fetchAs(NodeView.class).mappedBy((t, r) -> new NodeView(
-                r.get("hostname").asString(), r.get("ipAddress").asString(), r.get("type").asString(), r.get("subnetCidr").isNull() ? null : r.get("subnetCidr").asString())).all();
+                r.get("hostname").asString(), r.get("ipAddress").asString(), r.get("type").asString(), r.get("subnetCidr").isNull() ? null : r.get("subnetCidr").asString())).all());
     }
 
     @GetMapping("/subnets")
     @PreAuthorize("hasAnyAuthority('" + ApiRoles.READ_ONLY + "','" + ApiRoles.EDITOR + "','" + ApiRoles.ADMIN + "')")
     public List<SubnetView> subnets() {
-        return neo4jClient.query("""
+        return List.copyOf(neo4jClient.query("""
                 MATCH (s:Subnet)
                 OPTIONAL MATCH (s)-[:CONTAINS_NODE]->(n:HardwareNode)
                 RETURN s.cidr as cidr, s.vlan as vlan, s.routingZone as routingZone, count(DISTINCT n) as nodeCount
                 ORDER BY cidr
-                """).fetchAs(SubnetView.class).mappedBy((t, r) -> new SubnetView(r.get("cidr").asString(), r.get("vlan").asString(), r.get("routingZone").asString(), r.get("nodeCount").asInt())).all();
+                """).fetchAs(SubnetView.class).mappedBy((t, r) -> new SubnetView(r.get("cidr").asString(), r.get("vlan").asString(), r.get("routingZone").asString(), r.get("nodeCount").asInt())).all());
     }
 
     @GetMapping("/environments")
     @PreAuthorize("hasAnyAuthority('" + ApiRoles.READ_ONLY + "','" + ApiRoles.EDITOR + "','" + ApiRoles.ADMIN + "')")
     public List<EnvironmentView> environments() {
-        return neo4jClient.query("MATCH (e:ExecutionEnvironment) RETURN e.name as name, e.type as type ORDER BY name")
+        return List.copyOf(neo4jClient.query("MATCH (e:ExecutionEnvironment) RETURN e.name as name, e.type as type ORDER BY name")
                 .fetchAs(EnvironmentView.class)
                 .mappedBy((t, r) -> new EnvironmentView(r.get("name").asString(), r.get("type").asString()))
-                .all();
+                .all());
     }
 
     @GetMapping("/systems/{name}")

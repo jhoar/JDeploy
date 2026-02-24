@@ -3,6 +3,7 @@ package com.jdeploy.service;
 import org.springframework.data.neo4j.core.Neo4jClient;
 import org.springframework.stereotype.Service;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 
@@ -20,7 +21,7 @@ public class TopologyQueryService {
             throw new PreconditionViolationException("subnetId is required");
         }
 
-        return neo4jClient.query("""
+        return List.copyOf(neo4jClient.query("""
                 MATCH (s:Subnet {cidr: $subnetId})-[:CONTAINS_NODE]->(n:HardwareNode)
                 MATCH (d:DeploymentInstance)-[:TARGETS]->(n)
                 RETURN n.hostname as hostname, d.deploymentKey as deploymentKey
@@ -29,7 +30,7 @@ public class TopologyQueryService {
                 .bind(subnetId).to("subnetId")
                 .fetchAs(DeploymentView.class)
                 .mappedBy((typeSystem, record) -> new DeploymentView(record.get("hostname").asString(), record.get("deploymentKey").asString()))
-                .all();
+                .all());
     }
 
     public List<ImpactView> impactByNode(String nodeId) {
@@ -56,9 +57,9 @@ public class TopologyQueryService {
                 .map(row -> new ImpactView(
                         String.valueOf(row.get("componentName")),
                         String.valueOf(row.get("deploymentKey")),
-                        (List<String>) row.getOrDefault("peerNodes", List.of()),
-                        (List<String>) row.getOrDefault("sourceClusters", List.of()),
-                        (List<String>) row.getOrDefault("peerClusters", List.of())))
+                        toStringList(row.get("peerNodes")),
+                        toStringList(row.get("sourceClusters")),
+                        toStringList(row.get("peerClusters"))))
                 .toList();
     }
 
@@ -67,7 +68,7 @@ public class TopologyQueryService {
             throw new PreconditionViolationException("systemId is required");
         }
 
-        List<String> components = neo4jClient.query("""
+        List<String> components = List.copyOf(neo4jClient.query("""
                 MATCH (s:SoftwareSystem {name: $systemId})-[:HAS_COMPONENT]->(c:SoftwareComponent)
                 RETURN c.name + ':' + c.version as component
                 ORDER BY component
@@ -75,9 +76,9 @@ public class TopologyQueryService {
                 .bind(systemId).to("systemId")
                 .fetchAs(String.class)
                 .mappedBy((typeSystem, record) -> record.get("component").asString())
-                .all();
+                .all());
 
-        List<String> nodes = neo4jClient.query("""
+        List<String> nodes = List.copyOf(neo4jClient.query("""
                 MATCH (s:SoftwareSystem {name: $systemId})-[:HAS_COMPONENT]->(c:SoftwareComponent)-[:HAS_DEPLOYMENT]->(d:DeploymentInstance)-[:TARGETS]->(n:HardwareNode)
                 RETURN DISTINCT n.hostname as hostname
                 ORDER BY hostname
@@ -85,9 +86,17 @@ public class TopologyQueryService {
                 .bind(systemId).to("systemId")
                 .fetchAs(String.class)
                 .mappedBy((typeSystem, record) -> record.get("hostname").asString())
-                .all();
+                .all());
 
         return new SystemDiagramView(systemId, components, nodes);
+    }
+
+
+    private static List<String> toStringList(Object value) {
+        if (value instanceof Collection<?> collection) {
+            return collection.stream().map(String::valueOf).toList();
+        }
+        return List.of();
     }
 
     public record DeploymentView(String hostname, String deploymentKey) {
