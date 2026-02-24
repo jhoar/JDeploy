@@ -29,6 +29,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Testcontainers
@@ -209,7 +210,8 @@ class ApiIntegrationTest {
     void actuatorMetricsExposeCustomCounters() {
         RestTemplate ingestClient = authenticatedClient("ingest", "ingest-password");
         ingestClient.postForEntity("http://localhost:" + port + "/api/manifests/ingest", manifest("heterogeneous-topology.yaml"), String.class);
-        ingestClient.postForEntity("http://localhost:" + port + "/api/quality-gates/manifest", "bad: [", String.class);
+        assertThrows(org.springframework.web.client.HttpClientErrorException.BadRequest.class,
+                () -> ingestClient.postForEntity("http://localhost:" + port + "/api/quality-gates/manifest", "bad: [", String.class));
 
         RestTemplate readClient = authenticatedClient("reader", "reader-password");
         ResponseEntity<String> prometheus = readClient.getForEntity("http://localhost:" + port + "/actuator/prometheus", String.class);
