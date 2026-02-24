@@ -1,5 +1,6 @@
 package com.jdeploy.integration;
 
+import com.jdeploy.JDeployApplication;
 import com.jdeploy.api.ManifestController;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Testcontainers
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = JDeployApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class ApiIntegrationTest {
 
     @Container
