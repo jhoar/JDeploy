@@ -10,4 +10,4 @@ spring:
 
 jdeploy:
   artifact:
-    uml-output-path: ${JDEPLOY_UML_OUTPUT_PATH:examples/dev-uml}
+    uml-output-path: ${JDEPLOY_UML_OUTPUT_PATH:examples/artifacts/dev-uml}

@@ -7,6 +7,12 @@ spring:
       username: ${NEO4J_USERNAME:neo4j}
       password: ${NEO4J_PASSWORD:changeit}
 
+  security:
+    user:
+      name: ${SPRING_SECURITY_DEFAULT_USER:admin}
+      password: ${SPRING_SECURITY_DEFAULT_PASSWORD:admin-change-me}
+      roles: ADMIN
+
 management:
   endpoints:
     web:
@@ -24,7 +30,7 @@ springdoc:
 
 jdeploy:
   artifact:
-    uml-output-path: ${JDEPLOY_UML_OUTPUT_PATH:examples/uml}
+    uml-output-path: ${JDEPLOY_UML_OUTPUT_PATH:examples/artifacts/uml}
   security:
     users:
       ingest:
