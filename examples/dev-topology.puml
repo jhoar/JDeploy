@@ -1,0 +1,34 @@
+@startuml
+title JDeploy Deployment Topology
+
+skinparam shadowing false
+left to right direction
+
+frame "10.10.0.0/24 [VLAN dev-app]" as subnet_10_10_0_0_24 {
+  node "dev-hv01\n10.10.0.2" as node_dev_hv01 <<physical>>
+  node "dev-app01\n10.10.0.10" as node_dev_app01 <<vm>>
+  node "dev-grid01\n10.10.0.20" as node_dev_grid01 <<grid>>
+  node "dev-k8s01\n10.10.0.30" as node_dev_k8s01 <<k8s>>
+  database "dev-nas01\n10.10.0.40" as node_dev_nas01 <<storage>>
+  queue "dev-sw01\n10.10.0.254" as node_dev_sw01 <<switch>>
+}
+
+package "Payments" as system_Payments {
+  component "payments-api" as component_Payments_payments_api
+  artifact "payments-api:1.2.3" as artifact_Payments_payments_api_1_2_3
+  component_Payments_payments_api --> artifact_Payments_payments_api_1_2_3 : packaged as
+  artifact_Payments_payments_api_1_2_3 --> node_dev_app01 : deploy@dev
+}
+
+node_dev_app01 --> node_dev_sw01 : 1000Mbps/1ms
+node_dev_sw01 --> node_dev_k8s01 : 1000Mbps/2ms
+
+legend left
+  <<physical>> Physical node
+  <<vm>> Virtual machine
+  <<grid>> Grid/cluster node
+  <<k8s>> Kubernetes worker/control-plane
+  <<storage>> Storage appliance
+  <<switch>> Network switch
+endlegend
+@enduml
