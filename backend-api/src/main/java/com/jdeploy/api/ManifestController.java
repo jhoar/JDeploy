@@ -10,6 +10,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
@@ -25,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api")
 @Tag(name = "Manifest Operations")
+@SecurityRequirement(name = "basicAuth")
 public class ManifestController {
 
     private final ManifestIngestionService ingestionService;
@@ -42,7 +45,13 @@ public class ManifestController {
     @PostMapping("/manifests/ingest")
     @PreAuthorize("hasAuthority('" + ApiRoles.TOPOLOGY_INGEST + "')")
     @Operation(summary = "Ingest manifest and synchronize graph")
-    @ApiResponse(responseCode = "200", content = @Content(schema = @Schema(implementation = OperationResult.class)))
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true, content = @Content(mediaType = "application/x-yaml", schema = @Schema(type = "string", description = "Deployment manifest in YAML format")))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Manifest ingested", content = @Content(schema = @Schema(implementation = OperationResult.class))),
+            @ApiResponse(responseCode = "400", description = "Manifest validation failed", content = @Content(schema = @Schema(implementation = OperationResult.class))),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Insufficient privileges")
+    })
     public OperationResult ingest(@RequestBody @NotBlank String manifestYaml) {
         DeploymentManifestDto manifest = ingestionService.parseManifest(manifestYaml);
         contractValidator.validateForIngestion(manifest);
@@ -53,7 +62,13 @@ public class ManifestController {
     @PostMapping("/quality-gates/manifest")
     @PreAuthorize("hasAuthority('" + ApiRoles.READ_ONLY + "')")
     @Operation(summary = "Validate manifest contract and deployment quality gates")
-    @ApiResponse(responseCode = "200", content = @Content(schema = @Schema(implementation = OperationResult.class)))
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true, content = @Content(mediaType = "application/x-yaml", schema = @Schema(type = "string", description = "Deployment manifest in YAML format")))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Manifest checks passed", content = @Content(schema = @Schema(implementation = OperationResult.class))),
+            @ApiResponse(responseCode = "400", description = "Manifest checks failed", content = @Content(schema = @Schema(implementation = OperationResult.class))),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Insufficient privileges")
+    })
     public OperationResult qualityGateManifest(@RequestBody @NotBlank String manifestYaml) {
         DeploymentManifestDto manifest = ingestionService.parseManifest(manifestYaml);
         contractValidator.validateForIngestion(manifest);
@@ -64,7 +79,13 @@ public class ManifestController {
     @PostMapping("/quality-gates/deployment-targets")
     @PreAuthorize("hasAuthority('" + ApiRoles.READ_ONLY + "')")
     @Operation(summary = "Validate deployment target references")
-    @ApiResponse(responseCode = "200", content = @Content(schema = @Schema(implementation = OperationResult.class)))
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true, content = @Content(mediaType = "application/x-yaml", schema = @Schema(type = "string", description = "Deployment manifest in YAML format")))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Deployment target checks passed", content = @Content(schema = @Schema(implementation = OperationResult.class))),
+            @ApiResponse(responseCode = "400", description = "Deployment target checks failed", content = @Content(schema = @Schema(implementation = OperationResult.class))),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Insufficient privileges")
+    })
     public OperationResult qualityGateDeploymentTargets(@RequestBody @NotBlank String manifestYaml) {
         DeploymentManifestDto manifest = ingestionService.parseManifest(manifestYaml);
         contractValidator.validateForIngestion(manifest);
@@ -74,7 +95,11 @@ public class ManifestController {
     @GetMapping("/quality-gates/graph")
     @PreAuthorize("hasAuthority('" + ApiRoles.READ_ONLY + "')")
     @Operation(summary = "Evaluate persisted graph quality gates")
-    @ApiResponse(responseCode = "200", content = @Content(schema = @Schema(implementation = GraphQualityGateService.QualityGateReport.class)))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Graph quality report", content = @Content(schema = @Schema(implementation = GraphQualityGateService.QualityGateReport.class))),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Insufficient privileges")
+    })
     public GraphQualityGateService.QualityGateReport qualityGateGraph() {
         return graphQualityGateService.evaluateGraph();
     }
@@ -85,7 +110,7 @@ public class ManifestController {
         return new OperationResult("FAILED", exception.getMessage());
     }
 
-    @Schema(name = "OperationResult")
+    @Schema(name = "OperationResult", description = "Standard operation outcome payload")
     public record OperationResult(String status, String message) {
     }
 }

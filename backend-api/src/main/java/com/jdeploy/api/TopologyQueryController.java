@@ -6,6 +6,8 @@ import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.neo4j.core.Neo4jClient;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -19,6 +21,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api")
 @Tag(name = "Topology Queries")
+@SecurityRequirement(name = "basicAuth")
 public class TopologyQueryController {
 
     private final Neo4jClient neo4jClient;
@@ -30,7 +33,11 @@ public class TopologyQueryController {
     @GetMapping("/deployments/subnet/{subnetId}")
     @PreAuthorize("hasAuthority('" + ApiRoles.READ_ONLY + "')")
     @Operation(summary = "List deployments in a subnet")
-    @ApiResponse(responseCode = "200", content = @Content(array = @ArraySchema(schema = @Schema(implementation = DeploymentView.class))))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Deployments found", content = @Content(array = @ArraySchema(schema = @Schema(implementation = DeploymentView.class)))),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Insufficient privileges")
+    })
     public List<DeploymentView> deploymentsBySubnet(@PathVariable String subnetId) {
         return neo4jClient.query("""
                 MATCH (s:Subnet {cidr: $subnetId})-[:CONTAINS_NODE]->(n:HardwareNode)
@@ -47,7 +54,11 @@ public class TopologyQueryController {
     @GetMapping("/subnets/{subnetId}/deployments")
     @PreAuthorize("hasAuthority('" + ApiRoles.READ_ONLY + "')")
     @Operation(summary = "Show deployments in subnet")
-    @ApiResponse(responseCode = "200", content = @Content(array = @ArraySchema(schema = @Schema(implementation = DeploymentView.class))))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Deployments found", content = @Content(array = @ArraySchema(schema = @Schema(implementation = DeploymentView.class)))),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Insufficient privileges")
+    })
     public List<DeploymentView> deploymentsInSubnet(@PathVariable String subnetId) {
         return deploymentsBySubnet(subnetId);
     }
@@ -55,7 +66,11 @@ public class TopologyQueryController {
     @GetMapping("/impact/node/{nodeId}")
     @PreAuthorize("hasAuthority('" + ApiRoles.READ_ONLY + "')")
     @Operation(summary = "Show dependency impact for a node")
-    @ApiResponse(responseCode = "200", content = @Content(array = @ArraySchema(schema = @Schema(implementation = ImpactView.class))))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Impact records returned", content = @Content(array = @ArraySchema(schema = @Schema(implementation = ImpactView.class)))),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Insufficient privileges")
+    })
     public List<ImpactView> impactByNode(@PathVariable String nodeId) {
         return neo4jClient.query("""
                 MATCH (n:HardwareNode {hostname: $nodeId})<-[:TARGET_NODE]-(d:DeploymentInstance)<-[:HAS_DEPLOYMENT]-(c:SoftwareComponent)
@@ -77,7 +92,11 @@ public class TopologyQueryController {
     @GetMapping("/diagrams/system/{systemId}")
     @PreAuthorize("hasAnyAuthority('" + ApiRoles.ARTIFACT_GENERATE + "','" + ApiRoles.READ_ONLY + "')")
     @Operation(summary = "Get system deployment diagram model")
-    @ApiResponse(responseCode = "200", content = @Content(schema = @Schema(implementation = SystemDiagramView.class)))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Diagram model returned", content = @Content(schema = @Schema(implementation = SystemDiagramView.class))),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Insufficient privileges")
+    })
     public SystemDiagramView systemDiagram(@PathVariable String systemId) {
         List<String> components = neo4jClient.query("""
                 MATCH (s:SoftwareSystem {name: $systemId})-[:HAS_COMPONENT]->(c:SoftwareComponent)
@@ -105,7 +124,11 @@ public class TopologyQueryController {
     @GetMapping("/systems/{systemId}/diagram")
     @PreAuthorize("hasAuthority('" + ApiRoles.ARTIFACT_GENERATE + "')")
     @Operation(summary = "Generate diagram for system")
-    @ApiResponse(responseCode = "200", content = @Content(schema = @Schema(implementation = SystemDiagramView.class)))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Diagram model returned", content = @Content(schema = @Schema(implementation = SystemDiagramView.class))),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Insufficient privileges")
+    })
     public SystemDiagramView generateDiagramForSystem(@PathVariable String systemId) {
         return systemDiagram(systemId);
     }
@@ -113,7 +136,11 @@ public class TopologyQueryController {
     @GetMapping("/impact/node/{nodeId}/systems")
     @PreAuthorize("hasAuthority('" + ApiRoles.READ_ONLY + "')")
     @Operation(summary = "List systems impacted by node failure")
-    @ApiResponse(responseCode = "200", content = @Content(array = @ArraySchema(schema = @Schema(implementation = SystemImpactView.class))))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Impacted systems returned", content = @Content(array = @ArraySchema(schema = @Schema(implementation = SystemImpactView.class)))),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Insufficient privileges")
+    })
     public List<SystemImpactView> systemsImpactedByNodeFailure(@PathVariable String nodeId) {
         return neo4jClient.query("""
                 MATCH (n:HardwareNode {hostname: $nodeId})<-[:TARGET_NODE]-(d:DeploymentInstance)<-[:HAS_DEPLOYMENT]-(c:SoftwareComponent)
