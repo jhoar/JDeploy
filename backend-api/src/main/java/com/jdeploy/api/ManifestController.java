@@ -104,6 +104,19 @@ public class ManifestController {
         return graphQualityGateService.evaluateGraph();
     }
 
+
+    @GetMapping("/quality-gates/graph/latest")
+    @PreAuthorize("hasAuthority('" + ApiRoles.READ_ONLY + "')")
+    @Operation(summary = "Get latest scheduled graph quality report snapshot")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Latest graph quality report snapshot", content = @Content(schema = @Schema(implementation = GraphQualityGateService.QualityGateSnapshot.class))),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Insufficient privileges")
+    })
+    public GraphQualityGateService.QualityGateSnapshot latestGraphQualityReport() {
+        return graphQualityGateService.latestReport();
+    }
+
     @ExceptionHandler({IllegalArgumentException.class, PreconditionViolationException.class})
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public OperationResult badRequest(Exception exception) {

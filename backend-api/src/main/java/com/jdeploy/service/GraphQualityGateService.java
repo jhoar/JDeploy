@@ -1,18 +1,30 @@
 package com.jdeploy.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.neo4j.core.Neo4jClient;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Service
 public class GraphQualityGateService {
 
-    private final Neo4jClient neo4jClient;
+    private static final Logger log = LoggerFactory.getLogger(GraphQualityGateService.class);
 
-    public GraphQualityGateService(Neo4jClient neo4jClient) {
+    private final Neo4jClient neo4jClient;
+    private final boolean scheduledReportingEnabled;
+    private final AtomicReference<QualityGateSnapshot> latestSnapshot = new AtomicReference<>();
+
+    public GraphQualityGateService(Neo4jClient neo4jClient,
+                                   @Value("${jdeploy.quality-reporting.enabled:true}") boolean scheduledReportingEnabled) {
         this.neo4jClient = neo4jClient;
+        this.scheduledReportingEnabled = scheduledReportingEnabled;
     }
 
     public QualityGateReport evaluateGraph() {
@@ -78,9 +90,39 @@ public class GraphQualityGateService {
                 "softwareLinkedToMissingEnvironment", softwareLinkedToMissingEnvironment));
     }
 
+    @Scheduled(cron = "${jdeploy.quality-reporting.cron:0 */15 * * * *}")
+    public void runScheduledQualityReport() {
+        if (!scheduledReportingEnabled) {
+            return;
+        }
+
+        QualityGateSnapshot snapshot = evaluateAndStore();
+        int findingCount = snapshot.report().findings().values().stream().mapToInt(List::size).sum();
+
+        if (snapshot.report().passed()) {
+            log.info("Graph quality report passed with no findings at {}", snapshot.generatedAt());
+        } else {
+            log.warn("Graph quality report found {} issue(s) at {}: {}", findingCount, snapshot.generatedAt(), snapshot.report().findings());
+        }
+    }
+
+    public QualityGateSnapshot latestReport() {
+        QualityGateSnapshot cached = latestSnapshot.get();
+        return cached != null ? cached : evaluateAndStore();
+    }
+
+    private QualityGateSnapshot evaluateAndStore() {
+        QualityGateSnapshot snapshot = new QualityGateSnapshot(Instant.now(), evaluateGraph());
+        latestSnapshot.set(snapshot);
+        return snapshot;
+    }
+
     public record QualityGateReport(Map<String, List<String>> findings) {
         public boolean passed() {
             return findings.values().stream().allMatch(List::isEmpty);
         }
+    }
+
+    public record QualityGateSnapshot(Instant generatedAt, QualityGateReport report) {
     }
 }

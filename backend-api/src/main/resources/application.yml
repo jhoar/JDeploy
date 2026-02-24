@@ -33,6 +33,10 @@ springdoc:
 jdeploy:
   artifact:
     uml-output-path: ${JDEPLOY_UML_OUTPUT_PATH:examples/artifacts/uml}
+
+  quality-reporting:
+    enabled: ${JDEPLOY_QUALITY_REPORTING_ENABLED:true}
+    cron: ${JDEPLOY_QUALITY_REPORTING_CRON:0 */15 * * * *}
   security:
     users:
       ingest:
