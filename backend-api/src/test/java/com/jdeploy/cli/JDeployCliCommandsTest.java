@@ -80,7 +80,11 @@ class JDeployCliCommandsTest {
         CliAuthenticationService auth = new CliAuthenticationService("trusted", "cli-service", "pw");
         ObjectMapper objectMapper = new ObjectMapper();
 
-        CommandLine root = new CommandLine(new JDeployCliCommands());
+        Runnable rootCommand = () -> {
+            throw new CommandLine.ParameterException(new CommandLine("jdeploy"), "A subcommand is required");
+        };
+        CommandLine root = new CommandLine(rootCommand);
+        root.setCommandName("jdeploy");
         root.addSubcommand("ingest-manifest", new JDeployCliCommands.IngestManifestCommand(ingestionService, auth));
         root.addSubcommand("deployments-by-subnet", new JDeployCliCommands.DeploymentsBySubnetCommand(topologyQueryService, objectMapper));
         root.addSubcommand("impact-by-node", new JDeployCliCommands.ImpactByNodeCommand(topologyQueryService, objectMapper));

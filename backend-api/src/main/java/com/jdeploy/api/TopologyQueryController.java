@@ -33,7 +33,7 @@ public class TopologyQueryController {
         this.topologyQueryService = topologyQueryService;
     }
 
-    @GetMapping("/deployments/subnet/{subnetId}")
+    @GetMapping("/deployments/subnet/{subnetId:.+}")
     @PreAuthorize("hasAuthority('" + ApiRoles.READ_ONLY + "')")
     @Operation(summary = "List deployments in a subnet")
     @ApiResponses({
@@ -48,7 +48,7 @@ public class TopologyQueryController {
                 .toList();
     }
 
-    @GetMapping("/subnets/{subnetId}/deployments")
+    @GetMapping("/subnets/{subnetId:.+}/deployments")
     @PreAuthorize("hasAuthority('" + ApiRoles.READ_ONLY + "')")
     @Operation(summary = "Show deployments in subnet")
     @ApiResponses({
@@ -96,7 +96,7 @@ public class TopologyQueryController {
                 .all());
     }
 
-    @GetMapping("/clusters/{clusterName}/subnets/{subnetId}/nodes")
+    @GetMapping("/clusters/{clusterName}/subnets/{subnetId:.+}/nodes")
     @PreAuthorize("hasAuthority('" + ApiRoles.READ_ONLY + "')")
     @Operation(summary = "List cluster nodes scoped to a subnet")
     public List<ClusterNodeView> nodesInClusterAndSubnet(@PathVariable String clusterName, @PathVariable String subnetId) {
