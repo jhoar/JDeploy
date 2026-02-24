@@ -23,6 +23,7 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -78,7 +79,7 @@ class ApiIntegrationTest {
 
         RestTemplate readClient = authenticatedClient("reader", "reader-password");
         ResponseEntity<List<Map<String, Object>>> deploymentsResponse = readClient.exchange(
-                "http://localhost:" + port + "/api/subnets/10.10.0.0%2F24/deployments",
+                URI.create("http://localhost:" + port + "/api/subnets/10.10.0.0%2F24/deployments"),
                 HttpMethod.GET,
                 HttpEntity.EMPTY,
                 new ParameterizedTypeReference<>() {
@@ -114,7 +115,7 @@ class ApiIntegrationTest {
         RestTemplate generatorClient = authenticatedClient("generator", "generator-password");
 
         HttpClientErrorException.Unauthorized unauthorizedRead = assertThrows(HttpClientErrorException.Unauthorized.class,
-                () -> restTemplate.getForEntity("http://localhost:" + port + "/api/subnets/172.16.10.0%2F24/deployments", String.class));
+                () -> restTemplate.getForEntity(URI.create("http://localhost:" + port + "/api/subnets/172.16.10.0%2F24/deployments"), String.class));
         assertEquals(HttpStatus.UNAUTHORIZED, unauthorizedRead.getStatusCode());
 
         HttpClientErrorException.Forbidden forbiddenIngest = assertThrows(HttpClientErrorException.Forbidden.class,
