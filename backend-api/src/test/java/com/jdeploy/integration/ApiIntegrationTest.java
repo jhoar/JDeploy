@@ -78,6 +78,33 @@ class ApiIntegrationTest {
         assertEquals(HttpStatus.OK, deploymentsResponse.getStatusCode());
         assertFalse(deploymentsResponse.getBody().isEmpty());
 
+        ResponseEntity<List<Map<String, Object>>> subnetDeploymentsResponse = readClient.exchange(
+                "http://localhost:" + port + "/api/subnets/10.10.0.0/24/deployments",
+                HttpMethod.GET,
+                HttpEntity.EMPTY,
+                new ParameterizedTypeReference<>() {
+                });
+        assertEquals(HttpStatus.OK, subnetDeploymentsResponse.getStatusCode());
+        assertFalse(subnetDeploymentsResponse.getBody().isEmpty());
+
+        ResponseEntity<Map<String, Object>> systemDiagramResponse = readClient.exchange(
+                "http://localhost:" + port + "/api/systems/Billing/diagram",
+                HttpMethod.GET,
+                HttpEntity.EMPTY,
+                new ParameterizedTypeReference<>() {
+                });
+        assertEquals(HttpStatus.OK, systemDiagramResponse.getStatusCode());
+        assertEquals("Billing", systemDiagramResponse.getBody().get("systemName"));
+
+        ResponseEntity<List<Map<String, Object>>> impactSystemsResponse = readClient.exchange(
+                "http://localhost:" + port + "/api/impact/node/app01/systems",
+                HttpMethod.GET,
+                HttpEntity.EMPTY,
+                new ParameterizedTypeReference<>() {
+                });
+        assertEquals(HttpStatus.OK, impactSystemsResponse.getStatusCode());
+        assertFalse(impactSystemsResponse.getBody().isEmpty());
+
         ResponseEntity<String> forbiddenIngest = readClient.postForEntity(
                 "http://localhost:" + port + "/api/manifests/ingest",
                 yaml,
