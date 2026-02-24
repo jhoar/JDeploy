@@ -44,6 +44,14 @@ public class TopologyQueryController {
                 .all();
     }
 
+    @GetMapping("/subnets/{subnetId}/deployments")
+    @PreAuthorize("hasAuthority('" + ApiRoles.READ_ONLY + "')")
+    @Operation(summary = "Show deployments in subnet")
+    @ApiResponse(responseCode = "200", content = @Content(array = @ArraySchema(schema = @Schema(implementation = DeploymentView.class))))
+    public List<DeploymentView> deploymentsInSubnet(@PathVariable String subnetId) {
+        return deploymentsBySubnet(subnetId);
+    }
+
     @GetMapping("/impact/node/{nodeId}")
     @PreAuthorize("hasAuthority('" + ApiRoles.READ_ONLY + "')")
     @Operation(summary = "Show dependency impact for a node")
@@ -94,6 +102,35 @@ public class TopologyQueryController {
         return new SystemDiagramView(systemId, components, nodes);
     }
 
+    @GetMapping("/systems/{systemId}/diagram")
+    @PreAuthorize("hasAnyAuthority('" + ApiRoles.ARTIFACT_GENERATE + "','" + ApiRoles.READ_ONLY + "')")
+    @Operation(summary = "Generate diagram for system")
+    @ApiResponse(responseCode = "200", content = @Content(schema = @Schema(implementation = SystemDiagramView.class)))
+    public SystemDiagramView generateDiagramForSystem(@PathVariable String systemId) {
+        return systemDiagram(systemId);
+    }
+
+    @GetMapping("/impact/node/{nodeId}/systems")
+    @PreAuthorize("hasAuthority('" + ApiRoles.READ_ONLY + "')")
+    @Operation(summary = "List systems impacted by node failure")
+    @ApiResponse(responseCode = "200", content = @Content(array = @ArraySchema(schema = @Schema(implementation = SystemImpactView.class))))
+    public List<SystemImpactView> systemsImpactedByNodeFailure(@PathVariable String nodeId) {
+        return neo4jClient.query("""
+                MATCH (n:HardwareNode {hostname: $nodeId})<-[:TARGET_NODE]-(d:DeploymentInstance)<-[:HAS_DEPLOYMENT]-(c:SoftwareComponent)
+                MATCH (s:SoftwareSystem)-[:HAS_COMPONENT]->(c)
+                RETURN s.name as systemName, collect(DISTINCT c.name + ':' + c.version) as impactedComponents
+                ORDER BY systemName
+                """)
+                .bind(nodeId).to("nodeId")
+                .fetch()
+                .all()
+                .stream()
+                .map(row -> new SystemImpactView(
+                        String.valueOf(row.get("systemName")),
+                        (List<String>) row.getOrDefault("impactedComponents", List.of())))
+                .toList();
+    }
+
     @Schema(name = "DeploymentView")
     public record DeploymentView(String hostname, String deploymentKey) {
     }
@@ -104,5 +141,9 @@ public class TopologyQueryController {
 
     @Schema(name = "SystemDiagramView")
     public record SystemDiagramView(String systemName, List<String> components, List<String> targetNodes) {
+    }
+
+    @Schema(name = "SystemImpactView")
+    public record SystemImpactView(String systemName, List<String> impactedComponents) {
     }
 }
