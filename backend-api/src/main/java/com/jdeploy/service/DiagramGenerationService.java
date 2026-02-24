@@ -3,8 +3,6 @@ package com.jdeploy.service;
 import com.jdeploy.artifact.ArtifactMetadata;
 import com.jdeploy.artifact.ArtifactStorage;
 import com.jdeploy.service.dto.DeploymentManifestDto;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationRegistry;
 import org.springframework.stereotype.Service;
@@ -18,37 +16,37 @@ import java.util.Objects;
 public class DiagramGenerationService {
 
     private final ArtifactStorage artifactStorage;
-    private final Counter artifactGenerationCounter;
+    private final OperationMetricsService operationMetricsService;
     private final ObservationRegistry observationRegistry;
 
     public DiagramGenerationService(ArtifactStorage artifactStorage,
-                                    MeterRegistry meterRegistry,
-                                    ObservationRegistry observationRegistry) {
+                                    ObservationRegistry observationRegistry,
+                                    OperationMetricsService operationMetricsService) {
         this.artifactStorage = Objects.requireNonNull(artifactStorage, "artifactStorage must not be null");
         this.observationRegistry = Objects.requireNonNull(observationRegistry, "observationRegistry must not be null");
-        if (meterRegistry == null) {
-            throw new PreconditionViolationException("meterRegistry is required");
-        }
-        this.artifactGenerationCounter = Counter.builder("jdeploy.artifacts.generated")
-                .description("Number of generated deployment diagram artifacts")
-                .register(meterRegistry);
+        this.operationMetricsService = Objects.requireNonNull(operationMetricsService, "operationMetricsService must not be null");
     }
 
     public ArtifactMetadata generateDeploymentDiagram(DeploymentManifestDto manifest) {
         if (manifest == null) {
             throw new PreconditionViolationException("manifest is required");
         }
-        return Observation.createNotStarted("jdeploy.artifact.generate", observationRegistry)
-                .observe(() -> {
-                    String plantUml = buildPlantUml(manifest);
-                    String artifactId = "deployment-topology-" + Instant.now().toEpochMilli() + ".puml";
-                    ArtifactMetadata metadata = artifactStorage.create(artifactId, plantUml, Duration.ofDays(7));
-                    if (metadata == null) {
-                        throw new PostconditionViolationException("Artifact storage returned null metadata for generated deployment diagram");
-                    }
-                    artifactGenerationCounter.increment();
-                    return metadata;
-                });
+        try {
+            return Observation.createNotStarted("jdeploy.artifact.generate", observationRegistry)
+                    .observe(() -> {
+                        String plantUml = buildPlantUml(manifest);
+                        String artifactId = "deployment-topology-" + Instant.now().toEpochMilli() + ".puml";
+                        ArtifactMetadata metadata = artifactStorage.create(artifactId, plantUml, Duration.ofDays(7));
+                        if (metadata == null) {
+                            throw new PostconditionViolationException("Artifact storage returned null metadata for generated deployment diagram");
+                        }
+                        operationMetricsService.recordArtifactGenerationSuccess();
+                        return metadata;
+                    });
+        } catch (RuntimeException ex) {
+            operationMetricsService.recordArtifactGenerationError();
+            throw ex;
+        }
     }
 
     public String buildPlantUml(DeploymentManifestDto manifest) {

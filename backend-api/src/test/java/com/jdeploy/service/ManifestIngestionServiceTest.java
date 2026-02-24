@@ -48,8 +48,8 @@ class ManifestIngestionServiceTest {
         ManifestIngestionService service = new ManifestIngestionService(
                 parserService,
                 mock(Neo4jClient.class),
-                meterRegistry,
-                observationRegistry);
+                observationRegistry,
+                new OperationMetricsService(meterRegistry));
         DeploymentManifestDto manifest = service.parseManifest(yaml);
 
         assertEquals(1, manifest.subnets().size());
@@ -66,8 +66,8 @@ class ManifestIngestionServiceTest {
         ManifestIngestionService service = new ManifestIngestionService(
                 parserService,
                 mock(Neo4jClient.class),
-                meterRegistry,
-                observationRegistry);
+                observationRegistry,
+                new OperationMetricsService(meterRegistry));
 
         assertThrows(PreconditionViolationException.class, () -> service.parseManifest("  "));
     }

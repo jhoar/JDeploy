@@ -28,10 +28,11 @@ class DiagramGenerationServiceTest {
     void buildPlantUmlContainsSubnetsArtifactsAndLinks() {
         DeploymentManifestDto manifest = manifest();
 
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         DiagramGenerationService service = new DiagramGenerationService(
                 new NoopStorage(),
-                new SimpleMeterRegistry(),
-                ObservationRegistry.NOOP);
+                ObservationRegistry.NOOP,
+                new OperationMetricsService(meterRegistry));
 
         String uml = service.buildPlantUml(manifest);
 
@@ -52,10 +53,11 @@ class DiagramGenerationServiceTest {
         DeploymentManifestDto manifest = manifest();
         ArtifactStorage artifactStorage = new LocalFilesystemArtifactStorage(tempDir.toString());
 
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         DiagramGenerationService service = new DiagramGenerationService(
                 artifactStorage,
-                new SimpleMeterRegistry(),
-                ObservationRegistry.NOOP);
+                ObservationRegistry.NOOP,
+                new OperationMetricsService(meterRegistry));
 
         ArtifactMetadata metadata = service.generateDeploymentDiagram(manifest);
 
@@ -69,10 +71,11 @@ class DiagramGenerationServiceTest {
 
     @Test
     void generateDeploymentDiagramRejectsNullManifest() {
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         DiagramGenerationService service = new DiagramGenerationService(
                 new NoopStorage(),
-                new SimpleMeterRegistry(),
-                ObservationRegistry.NOOP);
+                ObservationRegistry.NOOP,
+                new OperationMetricsService(meterRegistry));
 
         assertThrows(PreconditionViolationException.class, () -> service.generateDeploymentDiagram(null));
     }
