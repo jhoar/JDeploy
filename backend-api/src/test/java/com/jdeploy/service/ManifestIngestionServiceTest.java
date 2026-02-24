@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.data.neo4j.core.Neo4jClient;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 
 class ManifestIngestionServiceTest {
@@ -55,5 +56,19 @@ class ManifestIngestionServiceTest {
         assertEquals("10.0.0.0/24", manifest.subnets().getFirst().cidr());
         assertEquals("Payments", manifest.systems().getFirst().name());
         assertEquals("payments-api", manifest.systems().getFirst().components().getFirst().name());
+    }
+
+    @Test
+    void parseManifestRejectsBlankYaml() {
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        ObservationRegistry observationRegistry = ObservationRegistry.create();
+        ManifestParserService parserService = new ManifestParserService(meterRegistry, observationRegistry);
+        ManifestIngestionService service = new ManifestIngestionService(
+                parserService,
+                mock(Neo4jClient.class),
+                meterRegistry,
+                observationRegistry);
+
+        assertThrows(PreconditionViolationException.class, () -> service.parseManifest("  "));
     }
 }

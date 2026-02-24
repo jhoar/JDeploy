@@ -16,6 +16,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DiagramGenerationServiceTest {
@@ -64,6 +65,16 @@ class DiagramGenerationServiceTest {
         String fileContent = Files.readString(metadata.path());
         assertTrue(fileContent.contains("@startuml"));
         assertTrue(fileContent.contains("@enduml"));
+    }
+
+    @Test
+    void generateDeploymentDiagramRejectsNullManifest() {
+        DiagramGenerationService service = new DiagramGenerationService(
+                new NoopStorage(),
+                new SimpleMeterRegistry(),
+                ObservationRegistry.NOOP);
+
+        assertThrows(PreconditionViolationException.class, () -> service.generateDeploymentDiagram(null));
     }
 
     private DeploymentManifestDto manifest() {

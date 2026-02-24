@@ -29,22 +29,35 @@ public class ManifestIngestionService {
         this.parserService = Objects.requireNonNull(parserService, "parserService must not be null");
         this.neo4jClient = Objects.requireNonNull(neo4jClient, "neo4jClient must not be null");
         this.observationRegistry = Objects.requireNonNull(observationRegistry, "observationRegistry must not be null");
+        if (meterRegistry == null) {
+            throw new PreconditionViolationException("meterRegistry is required");
+        }
         this.ingestionErrorCounter = Counter.builder("jdeploy.ingestion.errors")
                 .description("Number of manifest ingestion and parsing errors")
                 .register(meterRegistry);
     }
 
     public DeploymentManifestDto parseManifest(String yamlText) {
-        return parserService.parseManifest(yamlText);
+        DeploymentManifestDto manifest = parserService.parseManifest(yamlText);
+        if (manifest == null) {
+            throw new PostconditionViolationException("Manifest parser returned null for YAML payload");
+        }
+        return manifest;
     }
 
     public DeploymentManifestDto parseManifest(Path manifestPath) {
-        return parserService.parseManifest(manifestPath);
+        DeploymentManifestDto manifest = parserService.parseManifest(manifestPath);
+        if (manifest == null) {
+            throw new PostconditionViolationException("Manifest parser returned null for manifest path");
+        }
+        return manifest;
     }
 
     @Transactional
     public void synchronize(DeploymentManifestDto manifest) {
-        Objects.requireNonNull(manifest, "manifest must not be null");
+        if (manifest == null) {
+            throw new PreconditionViolationException("manifest is required");
+        }
 
         try {
             Observation.createNotStarted("jdeploy.manifest.synchronize", observationRegistry)

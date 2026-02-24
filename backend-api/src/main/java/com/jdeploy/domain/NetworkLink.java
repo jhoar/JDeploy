@@ -1,11 +1,12 @@
 package com.jdeploy.domain;
 
+import com.jdeploy.service.InvariantViolationException;
+import com.jdeploy.service.PostconditionViolationException;
+import com.jdeploy.service.PreconditionViolationException;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.neo4j.core.schema.GeneratedValue;
 import org.springframework.data.neo4j.core.schema.Node;
 import org.springframework.data.neo4j.core.schema.Relationship;
-
-import java.util.Objects;
 
 @Node("NetworkLink")
 public class NetworkLink {
@@ -28,15 +29,21 @@ public class NetworkLink {
 
     public NetworkLink(int bandwidthMbps, int latencyMs, HardwareNode fromNode, HardwareNode toNode) {
         if (bandwidthMbps <= 0) {
-            throw new IllegalArgumentException("bandwidthMbps must be positive");
+            throw new PreconditionViolationException("bandwidthMbps must be positive");
         }
         if (latencyMs < 0) {
-            throw new IllegalArgumentException("latencyMs must not be negative");
+            throw new PreconditionViolationException("latencyMs must not be negative");
         }
         this.bandwidthMbps = bandwidthMbps;
         this.latencyMs = latencyMs;
-        this.fromNode = Objects.requireNonNull(fromNode, "fromNode must not be null");
-        this.toNode = Objects.requireNonNull(toNode, "toNode must not be null");
+        this.fromNode = requireNonNull(fromNode, "fromNode");
+        this.toNode = requireNonNull(toNode, "toNode");
+        if (this.fromNode.getHostname().equals(this.toNode.getHostname())) {
+            throw new InvariantViolationException("NetworkLink must connect two distinct hardware nodes");
+        }
+        if (this.bandwidthMbps <= 0 || this.latencyMs < 0) {
+            throw new PostconditionViolationException("NetworkLink construction failed to preserve link constraints");
+        }
     }
 
     public Long getId() {
@@ -57,5 +64,12 @@ public class NetworkLink {
 
     public HardwareNode getToNode() {
         return toNode;
+    }
+
+    private static <T> T requireNonNull(T value, String field) {
+        if (value == null) {
+            throw new PreconditionViolationException(field + " is required");
+        }
+        return value;
     }
 }

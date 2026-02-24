@@ -26,6 +26,9 @@ public class ManifestParserService {
     public ManifestParserService(MeterRegistry meterRegistry,
                                  ObservationRegistry observationRegistry) {
         this.observationRegistry = Objects.requireNonNull(observationRegistry, "observationRegistry must not be null");
+        if (meterRegistry == null) {
+            throw new PreconditionViolationException("meterRegistry is required");
+        }
         this.ingestionErrorCounter = Counter.builder("jdeploy.ingestion.errors")
                 .description("Number of manifest ingestion and parsing errors")
                 .register(meterRegistry);
@@ -33,10 +36,19 @@ public class ManifestParserService {
     }
 
     public DeploymentManifestDto parseManifest(String yamlText) {
-        Objects.requireNonNull(yamlText, "yamlText must not be null");
+        if (yamlText == null) {
+            throw new PreconditionViolationException("yamlText is required");
+        }
+        if (yamlText.isBlank()) {
+            throw new PreconditionViolationException("yamlText must not be blank");
+        }
         try {
-            return Observation.createNotStarted("jdeploy.manifest.parse", observationRegistry)
+            DeploymentManifestDto manifest = Observation.createNotStarted("jdeploy.manifest.parse", observationRegistry)
                     .observeChecked(() -> yamlMapper.readValue(yamlText, DeploymentManifestDto.class));
+            if (manifest == null) {
+                throw new PostconditionViolationException("Parser produced null manifest");
+            }
+            return manifest;
         } catch (JsonProcessingException ex) {
             ingestionErrorCounter.increment();
             throw new IllegalArgumentException(buildParseMessage(ex), ex);
@@ -47,7 +59,9 @@ public class ManifestParserService {
     }
 
     public DeploymentManifestDto parseManifest(Path manifestPath) {
-        Objects.requireNonNull(manifestPath, "manifestPath must not be null");
+        if (manifestPath == null) {
+            throw new PreconditionViolationException("manifestPath is required");
+        }
         try {
             return parseManifest(Files.readString(manifestPath));
         } catch (IOException ex) {
