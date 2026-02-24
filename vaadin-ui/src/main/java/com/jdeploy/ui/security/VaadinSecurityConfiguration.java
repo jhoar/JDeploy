@@ -11,6 +11,7 @@ public class VaadinSecurityConfiguration extends VaadinWebSecurity {
     @Override
     protected void configure(HttpSecurity http) throws Exception {
         super.configure(http);
+        http.formLogin(login -> login.defaultSuccessUrl("/topology", true));
         setLoginView(http, LoginRoute.class);
     }
 }
