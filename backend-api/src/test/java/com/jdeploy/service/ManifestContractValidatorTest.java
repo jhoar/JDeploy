@@ -103,6 +103,45 @@ class ManifestContractValidatorTest {
         assertThrows(PreconditionViolationException.class, () -> validator.validateForIngestion(manifest));
     }
 
+
+    @Test
+    void shouldRejectDuplicateEnvironmentNames() {
+        DeploymentManifestDto manifest = new DeploymentManifestDto(
+                List.of(new DeploymentManifestDto.SubnetDto("10.0.0.0/24", "100", "A", List.of(
+                        new DeploymentManifestDto.HardwareNodeDto("node-1", "10.0.0.2", "vm", List.of("app"))
+                ))),
+                List.of(
+                        new DeploymentManifestDto.ExecutionEnvironmentDto("prod", "k8s"),
+                        new DeploymentManifestDto.ExecutionEnvironmentDto("prod", "k8s")
+                ),
+                List.of(new DeploymentManifestDto.SoftwareSystemDto("billing", List.of(
+                        new DeploymentManifestDto.SoftwareComponentDto("api", "1.0.0", List.of(
+                                new DeploymentManifestDto.DeploymentTargetDto("prod", "node-1")
+                        ))
+                ))),
+                List.of()
+        );
+
+        assertThrows(PreconditionViolationException.class, () -> validator.validateForIngestion(manifest));
+    }
+
+    @Test
+    void shouldRejectDuplicateSystemNames() {
+        DeploymentManifestDto manifest = new DeploymentManifestDto(
+                List.of(new DeploymentManifestDto.SubnetDto("10.0.0.0/24", "100", "A", List.of(
+                        new DeploymentManifestDto.HardwareNodeDto("node-1", "10.0.0.2", "vm", List.of("app"))
+                ))),
+                List.of(new DeploymentManifestDto.ExecutionEnvironmentDto("prod", "k8s")),
+                List.of(
+                        new DeploymentManifestDto.SoftwareSystemDto("billing", List.of()),
+                        new DeploymentManifestDto.SoftwareSystemDto("billing", List.of())
+                ),
+                List.of()
+        );
+
+        assertThrows(PreconditionViolationException.class, () -> validator.validateForIngestion(manifest));
+    }
+
     @Test
     void shouldAcceptValidManifest() {
         assertDoesNotThrow(() -> validator.validateForIngestion(validManifest(List.of(

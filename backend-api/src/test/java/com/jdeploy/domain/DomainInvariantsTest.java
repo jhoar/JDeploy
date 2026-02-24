@@ -1,5 +1,7 @@
 package com.jdeploy.domain;
 
+import com.jdeploy.service.InvariantViolationException;
+import com.jdeploy.service.PreconditionViolationException;
 import org.junit.jupiter.api.Test;
 
 import java.util.Set;
@@ -11,14 +13,28 @@ class DomainInvariantsTest {
 
     @Test
     void hardwareNodeRequiresRoles() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(PreconditionViolationException.class,
                 () -> new HardwareNode(HardwareNode.NodeType.VIRTUAL_MACHINE, "node-1", "10.0.0.10", Set.of()));
     }
 
     @Test
+    void hardwareNodeRejectsBlankRoleEntries() {
+        assertThrows(InvariantViolationException.class,
+                () -> new HardwareNode(HardwareNode.NodeType.VIRTUAL_MACHINE, "node-1", "10.0.0.10", Set.of("grid", " ")));
+    }
+
+    @Test
     void executionEnvironmentRequiresNonBlankName() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(PreconditionViolationException.class,
                 () -> new ExecutionEnvironment("  ", ExecutionEnvironment.EnvironmentType.PRODUCTION));
+    }
+
+    @Test
+    void networkLinkMustConnectDistinctNodes() {
+        HardwareNode app01 = new HardwareNode(HardwareNode.NodeType.VIRTUAL_MACHINE, "app01", "10.0.0.10", Set.of("grid"));
+
+        assertThrows(InvariantViolationException.class,
+                () -> new NetworkLink(1000, 2, app01, app01));
     }
 
     @Test

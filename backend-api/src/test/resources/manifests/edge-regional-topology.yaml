@@ -1,0 +1,55 @@
+subnets:
+  - cidr: 172.16.10.0/24
+    vlan: edge-10
+    routingZone: edge-a
+    nodes:
+      - hostname: edge-physical-01
+        ipAddress: 172.16.10.10
+        type: PHYSICAL
+        roles: [grid, sensor-ingest]
+      - hostname: edge-container-01
+        ipAddress: 172.16.10.20
+        type: CONTAINER_HOST
+        roles: [kubernetes, edge-runtime]
+  - cidr: 172.16.20.0/24
+    vlan: edge-20
+    routingZone: edge-b
+    nodes:
+      - hostname: edge-manager-01
+        ipAddress: 172.16.20.10
+        type: GRID_MANAGER
+        roles: [grid, orchestration]
+
+environments:
+  - name: qa
+    type: TEST
+  - name: prod
+    type: PRODUCTION
+
+systems:
+  - name: Telemetry
+    components:
+      - name: telemetry-api
+        version: 1.5.0
+        deployments:
+          - environment: qa
+            hostname: edge-container-01
+          - environment: prod
+            hostname: edge-physical-01
+  - name: Operations
+    components:
+      - name: ops-console
+        version: 3.0.0
+        deployments:
+          - environment: prod
+            hostname: edge-manager-01
+
+links:
+  - fromHostname: edge-container-01
+    toHostname: edge-manager-01
+    bandwidthMbps: 500
+    latencyMs: 8
+  - fromHostname: edge-physical-01
+    toHostname: edge-container-01
+    bandwidthMbps: 250
+    latencyMs: 12
