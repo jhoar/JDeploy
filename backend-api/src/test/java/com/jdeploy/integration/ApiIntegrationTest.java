@@ -5,7 +5,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.data.neo4j.core.Neo4jClient;
@@ -13,11 +12,13 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.support.BasicAuthenticationInterceptor;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.Neo4jContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -44,8 +45,7 @@ class ApiIntegrationTest {
         registry.add("spring.neo4j.authentication.password", () -> "changeit");
     }
 
-    @Autowired
-    private TestRestTemplate restTemplate;
+    private final RestTemplate restTemplate = new RestTemplate();
 
     @Autowired
     private Neo4jClient neo4jClient;
@@ -61,7 +61,7 @@ class ApiIntegrationTest {
     @Test
     void ingestionPersistsHeterogeneousTopologyAndServesReadEndpoints() {
         String yaml = manifest("heterogeneous-topology.yaml");
-        TestRestTemplate ingestClient = restTemplate.withBasicAuth("ingest", "ingest-password");
+        RestTemplate ingestClient = authenticatedClient("ingest", "ingest-password");
 
         ResponseEntity<ManifestController.OperationResult> ingestResponse = ingestClient.postForEntity(
                 "http://localhost:" + port + "/api/manifests/ingest",
@@ -73,7 +73,7 @@ class ApiIntegrationTest {
         assertEquals(2L, countNodes("ExecutionEnvironment"));
         assertEquals(2L, countNodes("NetworkLink"));
 
-        TestRestTemplate readClient = restTemplate.withBasicAuth("reader", "reader-password");
+        RestTemplate readClient = authenticatedClient("reader", "reader-password");
         ResponseEntity<List<Map<String, Object>>> deploymentsResponse = readClient.exchange(
                 "http://localhost:" + port + "/api/deployments/subnet/10.10.0.0/24",
                 HttpMethod.GET,
@@ -106,9 +106,9 @@ class ApiIntegrationTest {
     @Test
     void endpointsAndAuthorizationRulesAreEnforced() {
         String yaml = manifest("edge-regional-topology.yaml");
-        TestRestTemplate readClient = restTemplate.withBasicAuth("reader", "reader-password");
-        TestRestTemplate ingestClient = restTemplate.withBasicAuth("ingest", "ingest-password");
-        TestRestTemplate generatorClient = restTemplate.withBasicAuth("generator", "generator-password");
+        RestTemplate readClient = authenticatedClient("reader", "reader-password");
+        RestTemplate ingestClient = authenticatedClient("ingest", "ingest-password");
+        RestTemplate generatorClient = authenticatedClient("generator", "generator-password");
 
         ResponseEntity<String> unauthorizedRead = restTemplate.getForEntity(
                 "http://localhost:" + port + "/api/subnets/172.16.10.0/24/deployments",
@@ -152,7 +152,7 @@ class ApiIntegrationTest {
     void artifactGenerationAndDownloadEnforceAuthorities() {
         String yaml = manifest("heterogeneous-topology.yaml");
 
-        TestRestTemplate generatorClient = restTemplate.withBasicAuth("generator", "generator-password");
+        RestTemplate generatorClient = authenticatedClient("generator", "generator-password");
         ResponseEntity<Map<String, Object>> generated = generatorClient.exchange(
                 "http://localhost:" + port + "/api/artifacts/generate",
                 HttpMethod.POST,
@@ -163,7 +163,7 @@ class ApiIntegrationTest {
         String artifactId = String.valueOf(generated.getBody().get("artifactId"));
         assertNotNull(artifactId);
 
-        TestRestTemplate readClient = restTemplate.withBasicAuth("reader", "reader-password");
+        RestTemplate readClient = authenticatedClient("reader", "reader-password");
         ResponseEntity<String> downloaded = readClient.getForEntity(
                 "http://localhost:" + port + "/api/artifacts/" + artifactId,
                 String.class);
@@ -185,7 +185,7 @@ class ApiIntegrationTest {
                 CREATE (c)-[:HAS_DEPLOYMENT]->(d)
                 """).run();
 
-        TestRestTemplate readClient = restTemplate.withBasicAuth("reader", "reader-password");
+        RestTemplate readClient = authenticatedClient("reader", "reader-password");
         ResponseEntity<Map<String, Object>> qualityResponse = readClient.exchange(
                 "http://localhost:" + port + "/api/quality-gates/graph",
                 HttpMethod.GET,
@@ -206,15 +206,21 @@ class ApiIntegrationTest {
 
     @Test
     void actuatorMetricsExposeCustomCounters() {
-        TestRestTemplate ingestClient = restTemplate.withBasicAuth("ingest", "ingest-password");
+        RestTemplate ingestClient = authenticatedClient("ingest", "ingest-password");
         ingestClient.postForEntity("http://localhost:" + port + "/api/manifests/ingest", manifest("heterogeneous-topology.yaml"), String.class);
         ingestClient.postForEntity("http://localhost:" + port + "/api/quality-gates/manifest", "bad: [", String.class);
 
-        TestRestTemplate readClient = restTemplate.withBasicAuth("reader", "reader-password");
+        RestTemplate readClient = authenticatedClient("reader", "reader-password");
         ResponseEntity<String> prometheus = readClient.getForEntity("http://localhost:" + port + "/actuator/prometheus", String.class);
 
         assertEquals(HttpStatus.OK, prometheus.getStatusCode());
         assertTrue(prometheus.getBody().contains("jdeploy_ingestion_errors_total"));
+    }
+
+    private RestTemplate authenticatedClient(String username, String password) {
+        RestTemplate client = new RestTemplate();
+        client.getInterceptors().add(new BasicAuthenticationInterceptor(username, password));
+        return client;
     }
 
     private long countNodes(String label) {
