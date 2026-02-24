@@ -112,6 +112,41 @@ class ApiIntegrationTest {
         assertEquals(HttpStatus.FORBIDDEN, forbiddenIngest.getStatusCode());
     }
 
+
+    @Test
+    void artifactGenerationAndDownloadEnforceAuthorities() {
+        String yaml = validManifestYaml();
+
+        TestRestTemplate generatorClient = restTemplate.withBasicAuth("generator", "generator-password");
+        ResponseEntity<Map<String, Object>> generated = generatorClient.exchange(
+                "http://localhost:" + port + "/api/artifacts/generate",
+                HttpMethod.POST,
+                new HttpEntity<>(yaml),
+                new ParameterizedTypeReference<>() {
+                });
+        assertEquals(HttpStatus.OK, generated.getStatusCode());
+        String artifactId = String.valueOf(generated.getBody().get("artifactId"));
+
+        TestRestTemplate readClient = restTemplate.withBasicAuth("reader", "reader-password");
+        ResponseEntity<String> downloaded = readClient.getForEntity(
+                "http://localhost:" + port + "/api/artifacts/" + artifactId,
+                String.class);
+        assertEquals(HttpStatus.OK, downloaded.getStatusCode());
+        assertTrue(downloaded.getBody().contains("@startuml"));
+
+        ResponseEntity<String> forbiddenGenerateForReader = readClient.postForEntity(
+                "http://localhost:" + port + "/api/artifacts/generate",
+                yaml,
+                String.class);
+        assertEquals(HttpStatus.FORBIDDEN, forbiddenGenerateForReader.getStatusCode());
+
+        ResponseEntity<String> forbiddenIngestForGenerator = generatorClient.postForEntity(
+                "http://localhost:" + port + "/api/manifests/ingest",
+                yaml,
+                String.class);
+        assertEquals(HttpStatus.FORBIDDEN, forbiddenIngestForGenerator.getStatusCode());
+    }
+
     @Test
     void graphQualityGateFindsExplicitViolations() {
         neo4jClient.query("CREATE (:DeploymentInstance {deploymentKey:'orphan'})").run();

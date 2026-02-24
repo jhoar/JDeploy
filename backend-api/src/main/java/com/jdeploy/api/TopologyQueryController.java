@@ -103,7 +103,7 @@ public class TopologyQueryController {
     }
 
     @GetMapping("/systems/{systemId}/diagram")
-    @PreAuthorize("hasAnyAuthority('" + ApiRoles.ARTIFACT_GENERATE + "','" + ApiRoles.READ_ONLY + "')")
+    @PreAuthorize("hasAuthority('" + ApiRoles.ARTIFACT_GENERATE + "')")
     @Operation(summary = "Generate diagram for system")
     @ApiResponse(responseCode = "200", content = @Content(schema = @Schema(implementation = SystemDiagramView.class)))
     public SystemDiagramView generateDiagramForSystem(@PathVariable String systemId) {
