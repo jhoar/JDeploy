@@ -1,8 +1,9 @@
 package com.jdeploy.service;
 
 import com.jdeploy.service.dto.DeploymentManifestDto;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.observation.ObservationRegistry;
 import org.junit.jupiter.api.Test;
-
 import org.springframework.data.neo4j.core.Neo4jClient;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -40,7 +41,10 @@ class ManifestIngestionServiceTest {
                     latencyMs: 1
                 """;
 
-        ManifestIngestionService service = new ManifestIngestionService(mock(Neo4jClient.class));
+        ManifestIngestionService service = new ManifestIngestionService(
+                mock(Neo4jClient.class),
+                new SimpleMeterRegistry(),
+                ObservationRegistry.create());
         DeploymentManifestDto manifest = service.parseManifest(yaml);
 
         assertEquals(1, manifest.subnets().size());
