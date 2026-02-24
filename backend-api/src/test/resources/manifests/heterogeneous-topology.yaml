@@ -1,0 +1,51 @@
+subnets:
+  - cidr: 10.10.0.0/24
+    vlan: 110
+    routingZone: prod-core
+    nodes:
+      - hostname: k8s-cp-01
+        ipAddress: 10.10.0.10
+        type: KUBERNETES_CONTROL_PLANE
+        roles: [kubernetes, control-plane]
+      - hostname: k8s-worker-01
+        ipAddress: 10.10.0.20
+        type: KUBERNETES_WORKER
+        roles: [kubernetes, app]
+  - cidr: 10.20.0.0/24
+    vlan: 210
+    routingZone: data-tier
+    nodes:
+      - hostname: db-vm-01
+        ipAddress: 10.20.0.30
+        type: VIRTUAL_MACHINE
+        roles: [grid, database]
+
+environments:
+  - name: prod
+    type: PRODUCTION
+  - name: dr
+    type: STAGING
+
+systems:
+  - name: Billing
+    components:
+      - name: billing-api
+        version: 2.1.0
+        deployments:
+          - environment: prod
+            hostname: k8s-worker-01
+      - name: billing-worker
+        version: 2.1.0
+        deployments:
+          - environment: dr
+            hostname: db-vm-01
+
+links:
+  - fromHostname: k8s-worker-01
+    toHostname: db-vm-01
+    bandwidthMbps: 1000
+    latencyMs: 3
+  - fromHostname: k8s-cp-01
+    toHostname: k8s-worker-01
+    bandwidthMbps: 10000
+    latencyMs: 1

@@ -19,7 +19,14 @@ class GraphInvariantValidatorTest {
     void rejectsNodeWithoutClusterRole() {
         HardwareNode node = new HardwareNode(HardwareNode.NodeType.VIRTUAL_MACHINE, "node-1", "10.0.0.2", Set.of("app"));
 
-        assertThrows(PreconditionViolationException.class, () -> validator.requireClusterNodeRole(node));
+        assertThrows(InvariantViolationException.class, () -> validator.requireClusterNodeRole(node));
+    }
+
+    @Test
+    void acceptsGridRoleCaseInsensitively() {
+        HardwareNode node = new HardwareNode(HardwareNode.NodeType.VIRTUAL_MACHINE, "node-1", "10.0.0.2", Set.of("GrId"));
+
+        assertDoesNotThrow(() -> validator.requireClusterNodeRole(node));
     }
 
     @Test
@@ -27,7 +34,7 @@ class GraphInvariantValidatorTest {
         HardwareNode node = new HardwareNode(HardwareNode.NodeType.VIRTUAL_MACHINE, "node-1", "10.0.0.2", Set.of("grid"));
         Subnet subnet = new Subnet("10.0.0.0/24", "100", "A");
 
-        assertThrows(PreconditionViolationException.class, () -> validator.validateSubnetMembership(subnet, node));
+        assertThrows(InvariantViolationException.class, () -> validator.validateSubnetMembership(subnet, node));
 
         subnet.addNode(node);
         assertDoesNotThrow(() -> validator.validateSubnetMembership(subnet, node));
