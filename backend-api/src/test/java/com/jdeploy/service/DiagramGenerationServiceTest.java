@@ -3,6 +3,7 @@ package com.jdeploy.service;
 import com.jdeploy.artifact.ArtifactMetadata;
 import com.jdeploy.artifact.ArtifactStorage;
 import com.jdeploy.artifact.LocalFilesystemArtifactStorage;
+import com.jdeploy.artifact.StoredArtifact;
 import com.jdeploy.service.dto.DeploymentManifestDto;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.observation.ObservationRegistry;
@@ -93,13 +94,18 @@ class DiagramGenerationServiceTest {
 
     private static final class NoopStorage implements ArtifactStorage {
         @Override
-        public ArtifactMetadata create(String artifactName, String content) {
-            return new ArtifactMetadata(artifactName, Path.of(artifactName), content.length(), Instant.now(), Instant.now());
+        public ArtifactMetadata create(String artifactName, String content, Duration retention) {
+            return new ArtifactMetadata(artifactName, Path.of(artifactName), content.length(), Instant.now(), Instant.now(), Instant.now().plus(retention));
         }
 
         @Override
-        public ArtifactMetadata readMetadata(String artifactId) {
+        public StoredArtifact read(String artifactId) {
             throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public List<ArtifactMetadata> list() {
+            return List.of();
         }
 
         @Override

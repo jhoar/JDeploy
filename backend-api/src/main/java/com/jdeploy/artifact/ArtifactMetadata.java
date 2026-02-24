@@ -8,6 +8,7 @@ public record ArtifactMetadata(
         Path path,
         long sizeBytes,
         Instant createdAt,
-        Instant lastModifiedAt
+        Instant lastModifiedAt,
+        Instant retentionUntil
 ) {
 }

@@ -5,9 +5,11 @@ import java.util.List;
 
 public interface ArtifactStorage {
 
-    ArtifactMetadata create(String artifactName, String content);
+    ArtifactMetadata create(String artifactName, String content, Duration retention);
 
-    ArtifactMetadata readMetadata(String artifactId);
+    StoredArtifact read(String artifactId);
+
+    List<ArtifactMetadata> list();
 
     boolean delete(String artifactId);
 
