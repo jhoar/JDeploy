@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  JAVA_DISTRIBUTION: temurin
+  JAVA_VERSION: '17'
+  MAVEN_OPTS: -Dhttps.protocols=TLSv1.2 -Dmaven.repo.local=.m2/repository -Dorg.slf4j.simpleLogger.showDateTime=true -Djava.awt.headless=true
+  MAVEN_CLI_OPTS: --batch-mode --errors --fail-at-end --show-version
+
+jobs:
+  validate:
+    name: Validate runner toolchain
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Print toolchain versions
+        run: |
+          echo "Java distribution: ${JAVA_DISTRIBUTION}"
+          echo "Java version target: ${JAVA_VERSION}"
+          echo "Maven CLI options: ${MAVEN_CLI_OPTS}"
+          java -version || true
+          mvn -version || true
+          git --version
+          uname -a
