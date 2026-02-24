@@ -18,4 +18,8 @@ public class VaadinActionAuthorizationService {
     @PreAuthorize("hasAnyAuthority('" + ApiRoles.ARTIFACT_GENERATE + "','" + ApiRoles.READ_ONLY + "')")
     public void assertCanDownloadArtifacts() {
     }
+
+    @PreAuthorize("hasAnyAuthority('" + ApiRoles.EDITOR + "','" + ApiRoles.ADMIN + "')")
+    public void assertCanEditTopology() {
+    }
 }
