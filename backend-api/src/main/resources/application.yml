@@ -13,6 +13,21 @@ management:
       exposure:
         include: health,info,prometheus
 
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
 jdeploy:
   artifact:
     uml-output-path: ${JDEPLOY_UML_OUTPUT_PATH:examples/uml}
+  security:
+    users:
+      ingest:
+        username: ${JDEPLOY_INGEST_USER:ingest}
+        password: ${JDEPLOY_INGEST_PASSWORD:ingest-password}
+      generator:
+        username: ${JDEPLOY_GENERATOR_USER:generator}
+        password: ${JDEPLOY_GENERATOR_PASSWORD:generator-password}
+      reader:
+        username: ${JDEPLOY_READER_USER:reader}
+        password: ${JDEPLOY_READER_PASSWORD:reader-password}
