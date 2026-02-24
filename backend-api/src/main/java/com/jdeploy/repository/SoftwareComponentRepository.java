@@ -14,4 +14,17 @@ public interface SoftwareComponentRepository extends Neo4jRepository<SoftwareCom
         RETURN c
         """)
     List<SoftwareComponent> findOrphanComponents();
+
+    @Query("""
+        MATCH (:SoftwareSystem {name: $systemName})-[:HAS_COMPONENT]->(c:SoftwareComponent)
+        RETURN DISTINCT c
+        """)
+    List<SoftwareComponent> findComponentsBySystem(String systemName);
+
+    @Query("""
+        MATCH (n:HardwareNode {hostname: $hostname})<-[:TARGET_NODE]-(:DeploymentInstance)
+              <-[:HAS_DEPLOYMENT]-(c:SoftwareComponent)
+        RETURN DISTINCT c
+        """)
+    List<SoftwareComponent> findImpactedComponentsByNodeFailure(String hostname);
 }

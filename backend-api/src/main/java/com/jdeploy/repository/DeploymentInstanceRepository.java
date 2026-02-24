@@ -15,6 +15,26 @@ public interface DeploymentInstanceRepository extends Neo4jRepository<Deployment
     List<DeploymentInstance> findDeploymentsBySubnet(String subnetCidr);
 
     @Query("""
+        MATCH (d:DeploymentInstance)-[:TARGET_NODE]->(n:HardwareNode {hostname: $hostname})
+        RETURN DISTINCT d
+        """)
+    List<DeploymentInstance> findDeploymentsByNode(String hostname);
+
+    @Query("""
+        MATCH (d:DeploymentInstance)-[:TARGET_ENVIRONMENT]->(env:ExecutionEnvironment {name: $environmentName})
+        RETURN DISTINCT d
+        """)
+    List<DeploymentInstance> findDeploymentsByEnvironment(String environmentName);
+
+    @Query("""
+        MATCH (:Subnet {cidr: $subnetCidr})-[:CONTAINS_NODE]->(subnetNode:HardwareNode)
+              <-[:CONNECTS_FROM|CONNECTS_TO]-(:NetworkLink)-[:CONNECTS_FROM|CONNECTS_TO]->(n:HardwareNode)
+              <-[:TARGET_NODE]-(d:DeploymentInstance)
+        RETURN DISTINCT d
+        """)
+    List<DeploymentInstance> findDeploymentsImpactedBySubnetLinks(String subnetCidr);
+
+    @Query("""
         MATCH (d:DeploymentInstance)
         WHERE NOT (d)-[:TARGET_ENVIRONMENT]->(:ExecutionEnvironment)
            OR NOT (d)-[:TARGET_NODE]->(:HardwareNode)
