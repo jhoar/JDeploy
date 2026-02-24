@@ -41,10 +41,14 @@ class ManifestIngestionServiceTest {
                     latencyMs: 1
                 """;
 
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        ObservationRegistry observationRegistry = ObservationRegistry.create();
+        ManifestParserService parserService = new ManifestParserService(meterRegistry, observationRegistry);
         ManifestIngestionService service = new ManifestIngestionService(
+                parserService,
                 mock(Neo4jClient.class),
-                new SimpleMeterRegistry(),
-                ObservationRegistry.create());
+                meterRegistry,
+                observationRegistry);
         DeploymentManifestDto manifest = service.parseManifest(yaml);
 
         assertEquals(1, manifest.subnets().size());
