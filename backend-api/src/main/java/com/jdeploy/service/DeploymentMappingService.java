@@ -24,7 +24,7 @@ public class DeploymentMappingService {
         if (node == null) {
             throw new PreconditionViolationException("node is required for deployment target mapping");
         }
-        DeploymentInstance deploymentInstance = new DeploymentInstance(environment, node);
+        DeploymentInstance deploymentInstance = new DeploymentInstance(environment, node, null);
         graphInvariantValidator.validateDeploymentTarget(deploymentInstance);
         if (deploymentInstance.getTargetEnvironment() != environment || deploymentInstance.getTargetNode() != node) {
             throw new PostconditionViolationException("Deployment mapping postcondition failed: mapped target does not match requested inputs");

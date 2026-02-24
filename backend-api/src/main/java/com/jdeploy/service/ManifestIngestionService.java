@@ -64,11 +64,47 @@ public class ManifestIngestionService {
     }
 
     private void synchronizeManifest(DeploymentManifestDto manifest) {
+        backfillImplicitClusterSemantics();
         upsertEnvironments(manifest);
         upsertSubnetsAndNodes(manifest);
+        upsertClusters(manifest);
         upsertSystemsComponentsAndDeployments(manifest);
         upsertNetworkLinks(manifest);
         pruneObsoleteArtifacts(manifest);
+    }
+
+    private void backfillImplicitClusterSemantics() {
+        neo4jClient.query("""
+                MATCH (d:DeploymentInstance)-[:TARGET_ENVIRONMENT]->(env:ExecutionEnvironment)
+                WHERE NOT (d)-[:TARGETS]->(env)
+                MERGE (d)-[:TARGETS]->(env)
+                """)
+                .run();
+
+        neo4jClient.query("""
+                MATCH (d:DeploymentInstance)-[:TARGET_NODE]->(n:HardwareNode)
+                WHERE NOT (d)-[:TARGETS]->(n)
+                MERGE (d)-[:TARGETS]->(n)
+                """)
+                .run();
+
+        neo4jClient.query("""
+                MATCH (n:HardwareNode)
+                WHERE n.type IN ['GRID_MANAGER']
+                  AND NOT (:GridCluster)-[:HAS_NODE]->(n)
+                MERGE (c:GridCluster {name: 'implicit-grid'})
+                MERGE (c)-[:HAS_NODE]->(n)
+                """)
+                .run();
+
+        neo4jClient.query("""
+                MATCH (n:HardwareNode)
+                WHERE n.type IN ['KUBERNETES_CONTROL_PLANE', 'KUBERNETES_WORKER']
+                  AND NOT (:KubernetesCluster)-[:HAS_NODE]->(n)
+                MERGE (c:KubernetesCluster {name: 'implicit-kubernetes'})
+                MERGE (c)-[:HAS_NODE]->(n)
+                """)
+                .run();
     }
 
     private void upsertEnvironments(DeploymentManifestDto manifest) {
@@ -128,6 +164,48 @@ public class ManifestIngestionService {
         }
     }
 
+    private void upsertClusters(DeploymentManifestDto manifest) {
+        for (DeploymentManifestDto.ClusterDto cluster : manifest.clusters()) {
+            String clusterLabel = "KUBERNETES".equalsIgnoreCase(cluster.type()) ? "KubernetesCluster" : "GridCluster";
+
+            neo4jClient.query("""
+                    MERGE (c:%s {name: $clusterName})
+                    SET c.type = $clusterType
+                    """.formatted(clusterLabel))
+                    .bindAll(Map.of("clusterName", cluster.name(), "clusterType", cluster.type()))
+                    .run();
+
+            neo4jClient.query("""
+                    MATCH (c:%s {name: $clusterName})-[r:HAS_NODE]->(:HardwareNode)
+                    DELETE r
+                    """.formatted(clusterLabel))
+                    .bind(cluster.name()).to("clusterName")
+                    .run();
+
+            for (String hostname : cluster.nodes()) {
+                neo4jClient.query("""
+                        MATCH (c:%s {name: $clusterName}), (n:HardwareNode {hostname: $hostname})
+                        MERGE (c)-[:HAS_NODE]->(n)
+                        """.formatted(clusterLabel))
+                        .bindAll(Map.of("clusterName", cluster.name(), "hostname", hostname))
+                        .run();
+            }
+
+            if ("KUBERNETES".equalsIgnoreCase(cluster.type())) {
+                for (String namespace : cluster.namespaces()) {
+                    neo4jClient.query("""
+                            MERGE (ns:KubernetesNamespace {name: $namespace})
+                            WITH ns
+                            MATCH (c:KubernetesCluster {name: $clusterName})
+                            MERGE (ns)-[:BELONGS_TO]->(c)
+                            """)
+                            .bindAll(Map.of("namespace", namespace, "clusterName", cluster.name()))
+                            .run();
+                }
+            }
+        }
+    }
+
     private void upsertSystemsComponentsAndDeployments(DeploymentManifestDto manifest) {
         for (DeploymentManifestDto.SoftwareSystemDto system : manifest.systems()) {
             neo4jClient.query("""
@@ -177,7 +255,7 @@ public class ManifestIngestionService {
                             .run();
 
                     neo4jClient.query("""
-                            MATCH (d:DeploymentInstance {deploymentKey: $deploymentKey})-[r:TARGET_ENVIRONMENT|TARGET_NODE]->()
+                            MATCH (d:DeploymentInstance {deploymentKey: $deploymentKey})-[r:TARGET_ENVIRONMENT|TARGET_NODE|TARGETS|TARGET_NAMESPACE]->()
                             DELETE r
                             """)
                             .bind(deploymentKey).to("deploymentKey")
@@ -191,6 +269,8 @@ public class ManifestIngestionService {
                             MERGE (c)-[:HAS_DEPLOYMENT]->(d)
                             MERGE (d)-[:TARGET_ENVIRONMENT]->(e)
                             MERGE (d)-[:TARGET_NODE]->(n)
+                            MERGE (d)-[:TARGETS]->(e)
+                            MERGE (d)-[:TARGETS]->(n)
                             """)
                             .bindAll(Map.of(
                                     "componentName", component.name(),
@@ -200,6 +280,33 @@ public class ManifestIngestionService {
                                     "hostname", deployment.hostname()
                             ))
                             .run();
+
+                    if (deployment.namespace() != null && !deployment.namespace().isBlank()) {
+                        neo4jClient.query("""
+                                MERGE (ns:KubernetesNamespace {name: $namespace})
+                                """)
+                                .bind(deployment.namespace()).to("namespace")
+                                .run();
+
+                        neo4jClient.query("""
+                                MATCH (d:DeploymentInstance {deploymentKey: $deploymentKey}),
+                                      (ns:KubernetesNamespace {name: $namespace})
+                                MERGE (d)-[:TARGET_NAMESPACE]->(ns)
+                                MERGE (d)-[:TARGETS]->(ns)
+                                """)
+                                .bindAll(Map.of("deploymentKey", deploymentKey, "namespace", deployment.namespace()))
+                                .run();
+
+                        if (deployment.cluster() != null && !deployment.cluster().isBlank()) {
+                            neo4jClient.query("""
+                                    MATCH (ns:KubernetesNamespace {name: $namespace})
+                                    MERGE (kc:KubernetesCluster {name: $cluster})
+                                    MERGE (ns)-[:BELONGS_TO]->(kc)
+                                    """)
+                                    .bindAll(Map.of("namespace", deployment.namespace(), "cluster", deployment.cluster()))
+                                    .run();
+                        }
+                    }
                 }
             }
         }

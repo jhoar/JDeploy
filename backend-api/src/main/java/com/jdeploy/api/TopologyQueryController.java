@@ -41,7 +41,7 @@ public class TopologyQueryController {
     public List<DeploymentView> deploymentsBySubnet(@PathVariable String subnetId) {
         return neo4jClient.query("""
                 MATCH (s:Subnet {cidr: $subnetId})-[:CONTAINS_NODE]->(n:HardwareNode)
-                MATCH (d:DeploymentInstance)-[:TARGET_NODE]->(n)
+                MATCH (d:DeploymentInstance)-[:TARGETS]->(n)
                 RETURN n.hostname as hostname, d.deploymentKey as deploymentKey
                 ORDER BY hostname
                 """)
@@ -73,10 +73,16 @@ public class TopologyQueryController {
     })
     public List<ImpactView> impactByNode(@PathVariable String nodeId) {
         return neo4jClient.query("""
-                MATCH (n:HardwareNode {hostname: $nodeId})<-[:TARGET_NODE]-(d:DeploymentInstance)<-[:HAS_DEPLOYMENT]-(c:SoftwareComponent)
+                MATCH (n:HardwareNode {hostname: $nodeId})<-[:TARGETS]-(d:DeploymentInstance)<-[:HAS_DEPLOYMENT]-(c:SoftwareComponent)
+                OPTIONAL MATCH (sourceCluster)-[:HAS_NODE]->(n)
                 OPTIONAL MATCH (l:NetworkLink)-[:CONNECTS_FROM]->(n)
                 OPTIONAL MATCH (l)-[:CONNECTS_TO]->(peer:HardwareNode)
-                RETURN c.name as componentName, d.deploymentKey as deploymentKey, collect(DISTINCT peer.hostname) as peerNodes
+                OPTIONAL MATCH (peerCluster)-[:HAS_NODE]->(peer)
+                RETURN c.name as componentName,
+                       d.deploymentKey as deploymentKey,
+                       collect(DISTINCT peer.hostname) as peerNodes,
+                       collect(DISTINCT labels(sourceCluster)[0] + ':' + sourceCluster.name) as sourceClusters,
+                       collect(DISTINCT labels(peerCluster)[0] + ':' + peerCluster.name) as peerClusters
                 """)
                 .bind(nodeId).to("nodeId")
                 .fetch()
@@ -85,8 +91,53 @@ public class TopologyQueryController {
                 .map(row -> new ImpactView(
                         String.valueOf(row.get("componentName")),
                         String.valueOf(row.get("deploymentKey")),
-                        (List<String>) row.getOrDefault("peerNodes", List.of())))
+                        (List<String>) row.getOrDefault("peerNodes", List.of()),
+                        (List<String>) row.getOrDefault("sourceClusters", List.of()),
+                        (List<String>) row.getOrDefault("peerClusters", List.of())))
                 .toList();
+    }
+
+    @GetMapping("/clusters/{clusterName}/nodes")
+    @PreAuthorize("hasAuthority('" + ApiRoles.READ_ONLY + "')")
+    @Operation(summary = "List all nodes in a cluster")
+    public List<ClusterNodeView> nodesInCluster(@PathVariable String clusterName) {
+        return neo4jClient.query("""
+                MATCH (c)-[:HAS_NODE]->(n:HardwareNode)
+                WHERE c.name = $clusterName
+                  AND ('GridCluster' IN labels(c) OR 'KubernetesCluster' IN labels(c))
+                RETURN labels(c)[0] as clusterType, c.name as clusterName, n.hostname as hostname, n.ipAddress as ipAddress
+                ORDER BY hostname
+                """)
+                .bind(clusterName).to("clusterName")
+                .fetchAs(ClusterNodeView.class)
+                .mappedBy((typeSystem, record) -> new ClusterNodeView(
+                        record.get("clusterType").asString(),
+                        record.get("clusterName").asString(),
+                        record.get("hostname").asString(),
+                        record.get("ipAddress").asString()))
+                .all();
+    }
+
+    @GetMapping("/clusters/{clusterName}/subnets/{subnetId}/nodes")
+    @PreAuthorize("hasAuthority('" + ApiRoles.READ_ONLY + "')")
+    @Operation(summary = "List cluster nodes scoped to a subnet")
+    public List<ClusterNodeView> nodesInClusterAndSubnet(@PathVariable String clusterName, @PathVariable String subnetId) {
+        return neo4jClient.query("""
+                MATCH (c)-[:HAS_NODE]->(n:HardwareNode)
+                MATCH (:Subnet {cidr: $subnetId})-[:CONTAINS_NODE]->(n)
+                WHERE c.name = $clusterName
+                  AND ('GridCluster' IN labels(c) OR 'KubernetesCluster' IN labels(c))
+                RETURN labels(c)[0] as clusterType, c.name as clusterName, n.hostname as hostname, n.ipAddress as ipAddress
+                ORDER BY hostname
+                """)
+                .bindAll(java.util.Map.of("clusterName", clusterName, "subnetId", subnetId))
+                .fetchAs(ClusterNodeView.class)
+                .mappedBy((typeSystem, record) -> new ClusterNodeView(
+                        record.get("clusterType").asString(),
+                        record.get("clusterName").asString(),
+                        record.get("hostname").asString(),
+                        record.get("ipAddress").asString()))
+                .all();
     }
 
     @GetMapping("/diagrams/system/{systemId}")
@@ -109,7 +160,7 @@ public class TopologyQueryController {
                 .all();
 
         List<String> nodes = neo4jClient.query("""
-                MATCH (s:SoftwareSystem {name: $systemId})-[:HAS_COMPONENT]->(c:SoftwareComponent)-[:HAS_DEPLOYMENT]->(d:DeploymentInstance)-[:TARGET_NODE]->(n:HardwareNode)
+                MATCH (s:SoftwareSystem {name: $systemId})-[:HAS_COMPONENT]->(c:SoftwareComponent)-[:HAS_DEPLOYMENT]->(d:DeploymentInstance)-[:TARGETS]->(n:HardwareNode)
                 RETURN DISTINCT n.hostname as hostname
                 ORDER BY hostname
                 """)
@@ -143,7 +194,7 @@ public class TopologyQueryController {
     })
     public List<SystemImpactView> systemsImpactedByNodeFailure(@PathVariable String nodeId) {
         return neo4jClient.query("""
-                MATCH (n:HardwareNode {hostname: $nodeId})<-[:TARGET_NODE]-(d:DeploymentInstance)<-[:HAS_DEPLOYMENT]-(c:SoftwareComponent)
+                MATCH (n:HardwareNode {hostname: $nodeId})<-[:TARGETS]-(d:DeploymentInstance)<-[:HAS_DEPLOYMENT]-(c:SoftwareComponent)
                 MATCH (s:SoftwareSystem)-[:HAS_COMPONENT]->(c)
                 RETURN s.name as systemName, collect(DISTINCT c.name + ':' + c.version) as impactedComponents
                 ORDER BY systemName
@@ -163,7 +214,15 @@ public class TopologyQueryController {
     }
 
     @Schema(name = "ImpactView")
-    public record ImpactView(String componentName, String deploymentKey, List<String> peerNodes) {
+    public record ImpactView(String componentName,
+                             String deploymentKey,
+                             List<String> peerNodes,
+                             List<String> sourceClusters,
+                             List<String> peerClusters) {
+    }
+
+    @Schema(name = "ClusterNodeView")
+    public record ClusterNodeView(String clusterType, String clusterName, String hostname, String ipAddress) {
     }
 
     @Schema(name = "SystemDiagramView")

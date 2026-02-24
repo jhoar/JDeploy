@@ -10,6 +10,8 @@ import java.util.List;
 public record DeploymentManifestDto(
         @Schema(description = "Network subnets participating in the deployment")
         List<SubnetDto> subnets,
+        @Schema(description = "Optional cluster definitions and node membership")
+        List<ClusterDto> clusters,
         @Schema(description = "Execution environments where components run")
         List<ExecutionEnvironmentDto> environments,
         @Schema(description = "Business systems and their deployable components")
@@ -19,9 +21,22 @@ public record DeploymentManifestDto(
 ) {
     public DeploymentManifestDto {
         subnets = subnets == null ? List.of() : List.copyOf(subnets);
+        clusters = clusters == null ? List.of() : List.copyOf(clusters);
         environments = environments == null ? List.of() : List.copyOf(environments);
         systems = systems == null ? List.of() : List.copyOf(systems);
         links = links == null ? List.of() : List.copyOf(links);
+    }
+
+    @Schema(name = "Cluster", description = "Infrastructure cluster and optional namespace set")
+    public record ClusterDto(
+            @Schema(example = "prod-grid") String name,
+            @Schema(example = "GRID") String type,
+            @Schema(description = "Hosts that belong to the cluster") List<String> nodes,
+            @Schema(description = "Namespaces that belong to the cluster (for Kubernetes)") List<String> namespaces) {
+        public ClusterDto {
+            nodes = nodes == null ? List.of() : List.copyOf(nodes);
+            namespaces = namespaces == null ? List.of() : List.copyOf(namespaces);
+        }
     }
 
     @Schema(name = "Subnet", description = "A subnet boundary and its nodes")
@@ -73,7 +88,9 @@ public record DeploymentManifestDto(
     @Schema(name = "DeploymentTarget", description = "Concrete environment-node placement")
     public record DeploymentTargetDto(
             @Schema(example = "prod") String environment,
-            @Schema(example = "node-a-01") String hostname) {
+            @Schema(example = "node-a-01") String hostname,
+            @Schema(example = "prod-k8s") String cluster,
+            @Schema(example = "billing") String namespace) {
     }
 
     @Schema(name = "NetworkLink", description = "Directional connectivity relationship between nodes")

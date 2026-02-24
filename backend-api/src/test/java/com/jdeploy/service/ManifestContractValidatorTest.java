@@ -30,10 +30,11 @@ class ManifestContractValidatorTest {
                 List.of(new DeploymentManifestDto.SubnetDto("10.0.0.0/24", "100", "A", List.of(
                         new DeploymentManifestDto.HardwareNodeDto("node-1", "10.0.0.2", "vm", List.of("app"))
                 ))),
+                List.of(),
                 List.of(new DeploymentManifestDto.ExecutionEnvironmentDto("prod", "k8s")),
                 List.of(new DeploymentManifestDto.SoftwareSystemDto("billing", List.of(
                         new DeploymentManifestDto.SoftwareComponentDto("api", "1.0.0", List.of(
-                                new DeploymentManifestDto.DeploymentTargetDto("qa", "node-1")
+                                new DeploymentManifestDto.DeploymentTargetDto("qa", "node-1", null, null)
                         ))
                 ))),
                 List.of()
@@ -48,10 +49,11 @@ class ManifestContractValidatorTest {
                 List.of(new DeploymentManifestDto.SubnetDto("10.0.0.0/24", "100", "A", List.of(
                         new DeploymentManifestDto.HardwareNodeDto("node-1", "10.0.0.2", "vm", List.of("app"))
                 ))),
+                List.of(),
                 List.of(new DeploymentManifestDto.ExecutionEnvironmentDto("prod", "k8s")),
                 List.of(new DeploymentManifestDto.SoftwareSystemDto("billing", List.of(
                         new DeploymentManifestDto.SoftwareComponentDto("api", "1.0.0", List.of(
-                                new DeploymentManifestDto.DeploymentTargetDto("prod", "node-missing")
+                                new DeploymentManifestDto.DeploymentTargetDto("prod", "node-missing", null, null)
                         ))
                 ))),
                 List.of()
@@ -66,16 +68,17 @@ class ManifestContractValidatorTest {
                 List.of(new DeploymentManifestDto.SubnetDto("10.0.0.0/24", "100", "A", List.of(
                         new DeploymentManifestDto.HardwareNodeDto("node-1", "10.0.0.2", "vm", List.of("app"))
                 ))),
+                List.of(),
                 List.of(new DeploymentManifestDto.ExecutionEnvironmentDto("prod", "k8s")),
                 List.of(
                         new DeploymentManifestDto.SoftwareSystemDto("billing", List.of(
                                 new DeploymentManifestDto.SoftwareComponentDto("api", "1.0.0", List.of(
-                                        new DeploymentManifestDto.DeploymentTargetDto("prod", "node-1")
+                                        new DeploymentManifestDto.DeploymentTargetDto("prod", "node-1", null, null)
                                 ))
                         )),
                         new DeploymentManifestDto.SoftwareSystemDto("orders", List.of(
                                 new DeploymentManifestDto.SoftwareComponentDto("api", "1.0.0", List.of(
-                                        new DeploymentManifestDto.DeploymentTargetDto("prod", "node-1")
+                                        new DeploymentManifestDto.DeploymentTargetDto("prod", "node-1", null, null)
                                 ))
                         ))
                 ),
@@ -91,10 +94,11 @@ class ManifestContractValidatorTest {
                 List.of(new DeploymentManifestDto.SubnetDto("10.0.0.0/24", "100", "A", List.of(
                         new DeploymentManifestDto.HardwareNodeDto("node-1", "10.0.0.2", "vm", List.of("app"))
                 ))),
+                List.of(),
                 List.of(new DeploymentManifestDto.ExecutionEnvironmentDto("prod", "k8s")),
                 List.of(new DeploymentManifestDto.SoftwareSystemDto("billing", List.of(
                         new DeploymentManifestDto.SoftwareComponentDto("api", "1.0.0", List.of(
-                                new DeploymentManifestDto.DeploymentTargetDto("prod", "node-1")
+                                new DeploymentManifestDto.DeploymentTargetDto("prod", "node-1", null, null)
                         ))
                 ))),
                 List.of(new DeploymentManifestDto.NetworkLinkDto("node-missing", "node-1", 10, 2))
@@ -110,13 +114,14 @@ class ManifestContractValidatorTest {
                 List.of(new DeploymentManifestDto.SubnetDto("10.0.0.0/24", "100", "A", List.of(
                         new DeploymentManifestDto.HardwareNodeDto("node-1", "10.0.0.2", "vm", List.of("app"))
                 ))),
+                List.of(),
                 List.of(
                         new DeploymentManifestDto.ExecutionEnvironmentDto("prod", "k8s"),
                         new DeploymentManifestDto.ExecutionEnvironmentDto("prod", "k8s")
                 ),
                 List.of(new DeploymentManifestDto.SoftwareSystemDto("billing", List.of(
                         new DeploymentManifestDto.SoftwareComponentDto("api", "1.0.0", List.of(
-                                new DeploymentManifestDto.DeploymentTargetDto("prod", "node-1")
+                                new DeploymentManifestDto.DeploymentTargetDto("prod", "node-1", null, null)
                         ))
                 ))),
                 List.of()
@@ -131,6 +136,7 @@ class ManifestContractValidatorTest {
                 List.of(new DeploymentManifestDto.SubnetDto("10.0.0.0/24", "100", "A", List.of(
                         new DeploymentManifestDto.HardwareNodeDto("node-1", "10.0.0.2", "vm", List.of("app"))
                 ))),
+                List.of(),
                 List.of(new DeploymentManifestDto.ExecutionEnvironmentDto("prod", "k8s")),
                 List.of(
                         new DeploymentManifestDto.SoftwareSystemDto("billing", List.of()),
@@ -151,13 +157,33 @@ class ManifestContractValidatorTest {
         ))));
     }
 
-    private DeploymentManifestDto validManifest(List<DeploymentManifestDto.SubnetDto> subnets) {
-        return new DeploymentManifestDto(
-                subnets,
+    @Test
+    void shouldRejectNamespaceDeploymentWithoutCluster() {
+        DeploymentManifestDto manifest = new DeploymentManifestDto(
+                List.of(new DeploymentManifestDto.SubnetDto("10.0.0.0/24", "100", "A", List.of(
+                        new DeploymentManifestDto.HardwareNodeDto("node-1", "10.0.0.2", "vm", List.of("app"))
+                ))),
+                List.of(),
                 List.of(new DeploymentManifestDto.ExecutionEnvironmentDto("prod", "k8s")),
                 List.of(new DeploymentManifestDto.SoftwareSystemDto("billing", List.of(
                         new DeploymentManifestDto.SoftwareComponentDto("api", "1.0.0", List.of(
-                                new DeploymentManifestDto.DeploymentTargetDto("prod", "node-1")
+                                new DeploymentManifestDto.DeploymentTargetDto("prod", "node-1", null, "billing")
+                        ))
+                ))),
+                List.of()
+        );
+
+        assertThrows(PreconditionViolationException.class, () -> validator.validateForIngestion(manifest));
+    }
+
+    private DeploymentManifestDto validManifest(List<DeploymentManifestDto.SubnetDto> subnets) {
+        return new DeploymentManifestDto(
+                subnets,
+                List.of(),
+                List.of(new DeploymentManifestDto.ExecutionEnvironmentDto("prod", "k8s")),
+                List.of(new DeploymentManifestDto.SoftwareSystemDto("billing", List.of(
+                        new DeploymentManifestDto.SoftwareComponentDto("api", "1.0.0", List.of(
+                                new DeploymentManifestDto.DeploymentTargetDto("prod", "node-1", null, null)
                         ))
                 ))),
                 List.of()

@@ -27,6 +27,11 @@ class ManifestIngestionServiceTest {
                 environments:
                   - name: prod
                     type: PRODUCTION
+                clusters:
+                  - name: prod-k8s
+                    type: KUBERNETES
+                    nodes: [app01]
+                    namespaces: [payments]
                 systems:
                   - name: Payments
                     components:
@@ -35,6 +40,8 @@ class ManifestIngestionServiceTest {
                         deployments:
                           - environment: prod
                             hostname: app01
+                            cluster: prod-k8s
+                            namespace: payments
                 links:
                   - fromHostname: app01
                     toHostname: app01
@@ -53,6 +60,7 @@ class ManifestIngestionServiceTest {
         DeploymentManifestDto manifest = service.parseManifest(yaml);
 
         assertEquals(1, manifest.subnets().size());
+        assertEquals(1, manifest.clusters().size());
         assertEquals("10.0.0.0/24", manifest.subnets().getFirst().cidr());
         assertEquals("Payments", manifest.systems().getFirst().name());
         assertEquals("payments-api", manifest.systems().getFirst().components().getFirst().name());

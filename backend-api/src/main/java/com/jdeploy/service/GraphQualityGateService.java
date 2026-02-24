@@ -30,8 +30,8 @@ public class GraphQualityGateService {
     public QualityGateReport evaluateGraph() {
         List<String> orphanDeployments = neo4jClient.query("""
                 MATCH (d:DeploymentInstance)
-                WHERE NOT (d)-[:TARGET_NODE]->(:HardwareNode)
-                   OR NOT (d)-[:TARGET_ENVIRONMENT]->(:ExecutionEnvironment)
+                WHERE NOT (d)-[:TARGETS]->(:HardwareNode)
+                   OR NOT (d)-[:TARGETS]->(:ExecutionEnvironment)
                 RETURN d.deploymentKey AS value
                 ORDER BY value
                 """)
@@ -74,7 +74,7 @@ public class GraphQualityGateService {
 
         List<String> softwareLinkedToMissingEnvironment = neo4jClient.query("""
                 MATCH (c:SoftwareComponent)-[:HAS_DEPLOYMENT]->(d:DeploymentInstance)
-                WHERE NOT (d)-[:TARGET_ENVIRONMENT]->(:ExecutionEnvironment)
+                WHERE NOT (d)-[:TARGETS]->(:ExecutionEnvironment)
                 RETURN c.name + ':' + c.version + ' -> ' + coalesce(d.deploymentKey, 'unknown') AS value
                 ORDER BY value
                 """)
