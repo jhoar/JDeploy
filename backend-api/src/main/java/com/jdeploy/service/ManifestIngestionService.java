@@ -1,8 +1,6 @@
 package com.jdeploy.service;
 
 import com.jdeploy.service.dto.DeploymentManifestDto;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationRegistry;
 import org.springframework.data.neo4j.core.Neo4jClient;
@@ -19,22 +17,17 @@ public class ManifestIngestionService {
 
     private final ManifestParserService parserService;
     private final Neo4jClient neo4jClient;
-    private final Counter ingestionErrorCounter;
+    private final OperationMetricsService operationMetricsService;
     private final ObservationRegistry observationRegistry;
 
     public ManifestIngestionService(ManifestParserService parserService,
                                     Neo4jClient neo4jClient,
-                                    MeterRegistry meterRegistry,
-                                    ObservationRegistry observationRegistry) {
+                                    ObservationRegistry observationRegistry,
+                                    OperationMetricsService operationMetricsService) {
         this.parserService = Objects.requireNonNull(parserService, "parserService must not be null");
         this.neo4jClient = Objects.requireNonNull(neo4jClient, "neo4jClient must not be null");
         this.observationRegistry = Objects.requireNonNull(observationRegistry, "observationRegistry must not be null");
-        if (meterRegistry == null) {
-            throw new PreconditionViolationException("meterRegistry is required");
-        }
-        this.ingestionErrorCounter = Counter.builder("jdeploy.ingestion.errors")
-                .description("Number of manifest ingestion and parsing errors")
-                .register(meterRegistry);
+        this.operationMetricsService = Objects.requireNonNull(operationMetricsService, "operationMetricsService must not be null");
     }
 
     public DeploymentManifestDto parseManifest(String yamlText) {
@@ -59,11 +52,13 @@ public class ManifestIngestionService {
             throw new PreconditionViolationException("manifest is required");
         }
 
+        operationMetricsService.recordIngestionRequest();
         try {
             Observation.createNotStarted("jdeploy.manifest.synchronize", observationRegistry)
                     .observe(() -> synchronizeManifest(manifest));
+            operationMetricsService.recordIngestionSuccess();
         } catch (RuntimeException ex) {
-            ingestionErrorCounter.increment();
+            operationMetricsService.recordIngestionError();
             throw ex;
         }
     }

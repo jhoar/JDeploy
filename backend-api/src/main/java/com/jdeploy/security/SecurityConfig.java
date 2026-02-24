@@ -23,7 +23,7 @@ public class SecurityConfig {
         return http
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/openapi.json", "/actuator/health", "/actuator/info").permitAll()
+                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/openapi.json", "/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
                         .requestMatchers("/api/manifests/ingest").hasAuthority(ApiRoles.TOPOLOGY_INGEST)
                         .requestMatchers("/api/artifacts/**").hasAnyAuthority(ApiRoles.ARTIFACT_GENERATE, ApiRoles.READ_ONLY)
                         .requestMatchers("/api/**").hasAuthority(ApiRoles.READ_ONLY)
