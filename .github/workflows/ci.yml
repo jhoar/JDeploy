@@ -16,7 +16,7 @@ permissions:
 
 env:
   JAVA_DISTRIBUTION: temurin
-  JAVA_VERSION: '17'
+  JAVA_VERSION: '21'
   MAVEN_OPTS: -Dhttps.protocols=TLSv1.2 -Dmaven.repo.local=.m2/repository -Dorg.slf4j.simpleLogger.showDateTime=true -Djava.awt.headless=true
   MAVEN_CLI_OPTS: --batch-mode --errors --fail-at-end --show-version
 
@@ -37,3 +37,77 @@ jobs:
           mvn -version || true
           git --version
           uname -a
+
+  quality:
+    name: Quality (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - backend-api
+          - vaadin-ui
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Run configured formatting/style/static checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          MODULE="${{ matrix.module }}"
+          POM="${MODULE}/pom.xml"
+
+          declare -a goals=()
+
+          if rg -q '<artifactId>spotless-maven-plugin</artifactId>' "$POM"; then
+            goals+=("spotless:check")
+          fi
+          if rg -q '<artifactId>maven-checkstyle-plugin</artifactId>' "$POM"; then
+            goals+=("checkstyle:check")
+          fi
+          if rg -q '<artifactId>maven-pmd-plugin</artifactId>' "$POM"; then
+            goals+=("pmd:check")
+          fi
+          if rg -q '<artifactId>spotbugs-maven-plugin</artifactId>' "$POM"; then
+            goals+=("spotbugs:check")
+          fi
+
+          if [ ${#goals[@]} -eq 0 ]; then
+            echo "No dedicated formatting/style/static plugins configured in ${POM}; skipping plugin-specific checks."
+            exit 0
+          fi
+
+          mvn ${MAVEN_CLI_OPTS} -pl "$MODULE" -am "${goals[@]}"
+
+      - name: Run unit tests only
+        run: |
+          mvn ${MAVEN_CLI_OPTS} -pl ${{ matrix.module }} -am test -DskipITs=true -DskipIT=true -Dfailsafe.skipITs=true
+
+      - name: Upload JUnit XML reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-reports-${{ matrix.module }}
+          path: |
+            ${{ matrix.module }}/target/surefire-reports/*.xml
+            ${{ matrix.module }}/target/failsafe-reports/*.xml
+          if-no-files-found: warn
+
+      - name: JUnit summary and annotations
+        if: always()
+        uses: mikepenz/action-junit-report@v4
+        with:
+          report_paths: |
+            ${{ matrix.module }}/target/surefire-reports/*.xml
+            ${{ matrix.module }}/target/failsafe-reports/*.xml
+          check_name: JUnit Results (${{ matrix.module }})
+          require_tests: false
+          annotate_only: true
