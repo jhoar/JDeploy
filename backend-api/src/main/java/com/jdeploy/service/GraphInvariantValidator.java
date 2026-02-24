@@ -5,30 +5,39 @@ import com.jdeploy.domain.HardwareNode;
 import com.jdeploy.domain.Subnet;
 import org.springframework.stereotype.Service;
 
-import java.util.Objects;
-
 @Service
 public class GraphInvariantValidator {
 
     public void validateDeploymentTarget(DeploymentInstance deploymentInstance) {
-        Objects.requireNonNull(deploymentInstance, "deploymentInstance must not be null");
+        if (deploymentInstance == null) {
+            throw new PreconditionViolationException("deploymentInstance is required");
+        }
         if (deploymentInstance.getTargetEnvironment() == null || deploymentInstance.getTargetNode() == null) {
-            throw new PreconditionViolationException("DeploymentInstance requires both target environment and target node");
+            throw new InvariantViolationException("DeploymentInstance invariant violated: both target environment and target node are required");
+        }
+        if (deploymentInstance.getDeploymentKey() == null || deploymentInstance.getDeploymentKey().isBlank()) {
+            throw new PostconditionViolationException("Deployment target validation requires a non-blank deployment key");
         }
     }
 
     public void validateSubnetMembership(Subnet subnet, HardwareNode node) {
-        Objects.requireNonNull(subnet, "subnet must not be null");
-        Objects.requireNonNull(node, "node must not be null");
+        if (subnet == null) {
+            throw new PreconditionViolationException("subnet is required");
+        }
+        if (node == null) {
+            throw new PreconditionViolationException("node is required");
+        }
         if (subnet.getNodes().stream().noneMatch(existing -> existing.getHostname().equals(node.getHostname()))) {
-            throw new PreconditionViolationException("Node must belong to subnet before deployment mapping");
+            throw new InvariantViolationException("Node must belong to subnet before deployment mapping: " + node.getHostname());
         }
     }
 
     public void requireClusterNodeRole(HardwareNode node) {
-        Objects.requireNonNull(node, "node must not be null");
+        if (node == null) {
+            throw new PreconditionViolationException("node is required");
+        }
         if (node.getRoles().stream().noneMatch(role -> role.equalsIgnoreCase("grid") || role.equalsIgnoreCase("kubernetes"))) {
-            throw new PreconditionViolationException("Cluster membership requires grid or kubernetes role");
+            throw new InvariantViolationException("Cluster membership requires grid or kubernetes role for node: " + node.getHostname());
         }
     }
 }

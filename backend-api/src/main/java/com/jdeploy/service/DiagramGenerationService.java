@@ -26,25 +26,35 @@ public class DiagramGenerationService {
                                     ObservationRegistry observationRegistry) {
         this.artifactStorage = Objects.requireNonNull(artifactStorage, "artifactStorage must not be null");
         this.observationRegistry = Objects.requireNonNull(observationRegistry, "observationRegistry must not be null");
+        if (meterRegistry == null) {
+            throw new PreconditionViolationException("meterRegistry is required");
+        }
         this.artifactGenerationCounter = Counter.builder("jdeploy.artifacts.generated")
                 .description("Number of generated deployment diagram artifacts")
                 .register(meterRegistry);
     }
 
     public ArtifactMetadata generateDeploymentDiagram(DeploymentManifestDto manifest) {
-        Objects.requireNonNull(manifest, "manifest must not be null");
+        if (manifest == null) {
+            throw new PreconditionViolationException("manifest is required");
+        }
         return Observation.createNotStarted("jdeploy.artifact.generate", observationRegistry)
                 .observe(() -> {
                     String plantUml = buildPlantUml(manifest);
                     String artifactId = "deployment-topology-" + Instant.now().toEpochMilli() + ".puml";
                     ArtifactMetadata metadata = artifactStorage.create(artifactId, plantUml, Duration.ofDays(7));
+                    if (metadata == null) {
+                        throw new PostconditionViolationException("Artifact storage returned null metadata for generated deployment diagram");
+                    }
                     artifactGenerationCounter.increment();
                     return metadata;
                 });
     }
 
     public String buildPlantUml(DeploymentManifestDto manifest) {
-        Objects.requireNonNull(manifest, "manifest must not be null");
+        if (manifest == null) {
+            throw new PreconditionViolationException("manifest is required");
+        }
 
         StringBuilder builder = new StringBuilder();
         builder.append("@startuml\n");

@@ -1,12 +1,14 @@
 package com.jdeploy.domain;
 
+import com.jdeploy.service.InvariantViolationException;
+import com.jdeploy.service.PostconditionViolationException;
+import com.jdeploy.service.PreconditionViolationException;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.neo4j.core.schema.GeneratedValue;
 import org.springframework.data.neo4j.core.schema.Node;
 import org.springframework.data.neo4j.core.schema.Relationship;
 
 import java.util.HashSet;
-import java.util.Objects;
 import java.util.Set;
 
 @Node("Subnet")
@@ -30,10 +32,17 @@ public class Subnet {
         this.cidr = requireNonBlank(cidr, "cidr");
         this.vlan = requireNonBlank(vlan, "vlan");
         this.routingZone = requireNonBlank(routingZone, "routingZone");
+        if (this.cidr.isBlank() || this.vlan.isBlank() || this.routingZone.isBlank()) {
+            throw new PostconditionViolationException("Subnet construction failed to initialize required state");
+        }
     }
 
     public void addNode(HardwareNode node) {
-        nodes.add(Objects.requireNonNull(node, "node must not be null"));
+        HardwareNode requiredNode = requireNonNull(node, "node");
+        nodes.add(requiredNode);
+        if (nodes.stream().noneMatch(existing -> existing.getHostname().equals(requiredNode.getHostname()))) {
+            throw new InvariantViolationException("Subnet node membership invariant violated after node addition");
+        }
     }
 
     public Long getId() {
@@ -57,9 +66,18 @@ public class Subnet {
     }
 
     private static String requireNonBlank(String value, String field) {
-        Objects.requireNonNull(value, field + " must not be null");
+        if (value == null) {
+            throw new PreconditionViolationException(field + " is required");
+        }
         if (value.isBlank()) {
-            throw new IllegalArgumentException(field + " must not be blank");
+            throw new PreconditionViolationException(field + " must not be blank");
+        }
+        return value;
+    }
+
+    private static <T> T requireNonNull(T value, String field) {
+        if (value == null) {
+            throw new PreconditionViolationException(field + " is required");
         }
         return value;
     }

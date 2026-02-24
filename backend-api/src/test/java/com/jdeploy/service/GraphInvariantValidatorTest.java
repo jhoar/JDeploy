@@ -40,6 +40,6 @@ class GraphInvariantValidatorTest {
         DeploymentInstance deployment = new DeploymentInstance(env, node);
 
         assertDoesNotThrow(() -> validator.validateDeploymentTarget(deployment));
-        assertThrows(NullPointerException.class, () -> validator.validateDeploymentTarget(null));
+        assertThrows(PreconditionViolationException.class, () -> validator.validateDeploymentTarget(null));
     }
 }
