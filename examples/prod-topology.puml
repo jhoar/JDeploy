@@ -1,0 +1,42 @@
+@startuml
+title JDeploy Deployment Topology
+
+skinparam shadowing false
+left to right direction
+
+frame "10.20.0.0/24 [VLAN prod-app]" as subnet_10_20_0_0_24 {
+  node "prod-hv01\n10.20.0.2" as node_prod_hv01 <<physical>>
+  node "prod-app01\n10.20.0.10" as node_prod_app01 <<vm>>
+  node "prod-grid01\n10.20.0.20" as node_prod_grid01 <<grid>>
+  node "prod-k8s01\n10.20.0.30" as node_prod_k8s01 <<k8s>>
+  database "prod-nas01\n10.20.0.40" as node_prod_nas01 <<storage>>
+  queue "prod-sw01\n10.20.0.254" as node_prod_sw01 <<switch>>
+}
+
+package "Payments" as system_Payments {
+  component "payments-api" as component_Payments_payments_api
+  artifact "payments-api:2.0.0" as artifact_Payments_payments_api_2_0_0
+  component_Payments_payments_api --> artifact_Payments_payments_api_2_0_0 : packaged as
+  artifact_Payments_payments_api_2_0_0 --> node_prod_app01 : deploy@prod
+}
+
+package "Fraud" as system_Fraud {
+  component "fraud-engine" as component_Fraud_fraud_engine
+  artifact "fraud-engine:4.1.0" as artifact_Fraud_fraud_engine_4_1_0
+  component_Fraud_fraud_engine --> artifact_Fraud_fraud_engine_4_1_0 : packaged as
+  artifact_Fraud_fraud_engine_4_1_0 --> node_prod_k8s01 : deploy@prod
+}
+
+node_prod_app01 --> node_prod_sw01 : 10000Mbps/1ms
+node_prod_sw01 --> node_prod_k8s01 : 10000Mbps/1ms
+node_prod_k8s01 --> node_prod_nas01 : 5000Mbps/3ms
+
+legend left
+  <<physical>> Physical node
+  <<vm>> Virtual machine
+  <<grid>> Grid/cluster node
+  <<k8s>> Kubernetes worker/control-plane
+  <<storage>> Storage appliance
+  <<switch>> Network switch
+endlegend
+@enduml
