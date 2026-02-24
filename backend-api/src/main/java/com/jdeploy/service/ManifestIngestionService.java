@@ -1,7 +1,5 @@
 package com.jdeploy.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.jdeploy.service.dto.DeploymentManifestDto;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -11,50 +9,37 @@ import org.springframework.data.neo4j.core.Neo4jClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 @Service
 public class ManifestIngestionService {
 
-    private final ObjectMapper yamlMapper;
+    private final ManifestParserService parserService;
     private final Neo4jClient neo4jClient;
     private final Counter ingestionErrorCounter;
     private final ObservationRegistry observationRegistry;
 
-    public ManifestIngestionService(Neo4jClient neo4jClient,
+    public ManifestIngestionService(ManifestParserService parserService,
+                                    Neo4jClient neo4jClient,
                                     MeterRegistry meterRegistry,
                                     ObservationRegistry observationRegistry) {
+        this.parserService = Objects.requireNonNull(parserService, "parserService must not be null");
         this.neo4jClient = Objects.requireNonNull(neo4jClient, "neo4jClient must not be null");
         this.observationRegistry = Objects.requireNonNull(observationRegistry, "observationRegistry must not be null");
         this.ingestionErrorCounter = Counter.builder("jdeploy.ingestion.errors")
                 .description("Number of manifest ingestion and parsing errors")
                 .register(meterRegistry);
-        this.yamlMapper = new ObjectMapper(new YAMLFactory());
     }
 
     public DeploymentManifestDto parseManifest(String yamlText) {
-        Objects.requireNonNull(yamlText, "yamlText must not be null");
-        try {
-            return Observation.createNotStarted("jdeploy.manifest.parse", observationRegistry)
-                    .observeChecked(() -> yamlMapper.readValue(yamlText, DeploymentManifestDto.class));
-        } catch (Exception ex) {
-            ingestionErrorCounter.increment();
-            throw new IllegalArgumentException("Unable to parse deployment manifest yaml", ex);
-        }
+        return parserService.parseManifest(yamlText);
     }
 
     public DeploymentManifestDto parseManifest(Path manifestPath) {
-        Objects.requireNonNull(manifestPath, "manifestPath must not be null");
-        try {
-            return parseManifest(Files.readString(manifestPath));
-        } catch (IOException ex) {
-            ingestionErrorCounter.increment();
-            throw new IllegalArgumentException("Unable to read deployment manifest file", ex);
-        }
+        return parserService.parseManifest(manifestPath);
     }
 
     @Transactional
@@ -71,6 +56,14 @@ public class ManifestIngestionService {
     }
 
     private void synchronizeManifest(DeploymentManifestDto manifest) {
+        upsertEnvironments(manifest);
+        upsertSubnetsAndNodes(manifest);
+        upsertSystemsComponentsAndDeployments(manifest);
+        upsertNetworkLinks(manifest);
+        pruneObsoleteArtifacts(manifest);
+    }
+
+    private void upsertEnvironments(DeploymentManifestDto manifest) {
         for (DeploymentManifestDto.ExecutionEnvironmentDto environment : manifest.environments()) {
             neo4jClient.query("""
                     MERGE (e:ExecutionEnvironment {name: $name})
@@ -79,7 +72,9 @@ public class ManifestIngestionService {
                     .bindAll(Map.of("name", environment.name(), "type", environment.type()))
                     .run();
         }
+    }
 
+    private void upsertSubnetsAndNodes(DeploymentManifestDto manifest) {
         for (DeploymentManifestDto.SubnetDto subnet : manifest.subnets()) {
             neo4jClient.query("""
                     MERGE (s:Subnet {cidr: $cidr})
@@ -91,6 +86,13 @@ public class ManifestIngestionService {
                             "vlan", subnet.vlan(),
                             "routingZone", subnet.routingZone()
                     ))
+                    .run();
+
+            neo4jClient.query("""
+                    MATCH (s:Subnet {cidr: $cidr})-[r:CONTAINS_NODE]->(:HardwareNode)
+                    DELETE r
+                    """)
+                    .bind(subnet.cidr()).to("cidr")
                     .run();
 
             for (DeploymentManifestDto.HardwareNodeDto node : subnet.nodes()) {
@@ -116,10 +118,19 @@ public class ManifestIngestionService {
                         .run();
             }
         }
+    }
 
+    private void upsertSystemsComponentsAndDeployments(DeploymentManifestDto manifest) {
         for (DeploymentManifestDto.SoftwareSystemDto system : manifest.systems()) {
             neo4jClient.query("""
                     MERGE (s:SoftwareSystem {name: $name})
+                    """)
+                    .bind(system.name()).to("name")
+                    .run();
+
+            neo4jClient.query("""
+                    MATCH (s:SoftwareSystem {name: $name})-[r:HAS_COMPONENT]->(:SoftwareComponent)
+                    DELETE r
                     """)
                     .bind(system.name()).to("name")
                     .run();
@@ -142,10 +153,24 @@ public class ManifestIngestionService {
                         ))
                         .run();
 
+                neo4jClient.query("""
+                        MATCH (c:SoftwareComponent {name: $name, version: $version})-[r:HAS_DEPLOYMENT]->(:DeploymentInstance)
+                        DELETE r
+                        """)
+                        .bindAll(Map.of("name", component.name(), "version", component.version()))
+                        .run();
+
                 for (DeploymentManifestDto.DeploymentTargetDto deployment : component.deployments()) {
-                    String deploymentKey = deployment.environment() + "@" + deployment.hostname() + ":" + component.name();
+                    String deploymentKey = deployment.environment() + "@" + deployment.hostname() + ":" + component.name() + ":" + component.version();
                     neo4jClient.query("""
                             MERGE (d:DeploymentInstance {deploymentKey: $deploymentKey})
+                            """)
+                            .bind(deploymentKey).to("deploymentKey")
+                            .run();
+
+                    neo4jClient.query("""
+                            MATCH (d:DeploymentInstance {deploymentKey: $deploymentKey})-[r:TARGET_ENVIRONMENT|TARGET_NODE]->()
+                            DELETE r
                             """)
                             .bind(deploymentKey).to("deploymentKey")
                             .run();
@@ -170,7 +195,9 @@ public class ManifestIngestionService {
                 }
             }
         }
+    }
 
+    private void upsertNetworkLinks(DeploymentManifestDto manifest) {
         for (DeploymentManifestDto.NetworkLinkDto link : manifest.links()) {
             String linkKey = link.fromHostname() + "->" + link.toHostname();
             neo4jClient.query("""
@@ -179,6 +206,9 @@ public class ManifestIngestionService {
                     MERGE (l:NetworkLink {linkKey: $linkKey})
                     SET l.bandwidthMbps = $bandwidthMbps,
                         l.latencyMs = $latencyMs
+                    WITH l, from, to
+                    MATCH (l)-[old:CONNECTS_FROM|CONNECTS_TO]->()
+                    DELETE old
                     MERGE (l)-[:CONNECTS_FROM]->(from)
                     MERGE (l)-[:CONNECTS_TO]->(to)
                     """)
@@ -191,5 +221,31 @@ public class ManifestIngestionService {
                     ))
                     .run();
         }
+    }
+
+    private void pruneObsoleteArtifacts(DeploymentManifestDto manifest) {
+        List<String> deploymentKeys = manifest.systems().stream()
+                .flatMap(system -> system.components().stream()
+                        .flatMap(component -> component.deployments().stream()
+                                .map(target -> target.environment() + "@" + target.hostname() + ":" + component.name() + ":" + component.version())))
+                .toList();
+        neo4jClient.query("""
+                MATCH (d:DeploymentInstance)
+                WHERE NOT d.deploymentKey IN $deploymentKeys
+                DETACH DELETE d
+                """)
+                .bind(deploymentKeys).to("deploymentKeys")
+                .run();
+
+        List<String> linkKeys = manifest.links().stream()
+                .map(link -> link.fromHostname() + "->" + link.toHostname())
+                .toList();
+        neo4jClient.query("""
+                MATCH (l:NetworkLink)
+                WHERE NOT l.linkKey IN $linkKeys
+                DETACH DELETE l
+                """)
+                .bind(linkKeys).to("linkKeys")
+                .run();
     }
 }
