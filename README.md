@@ -91,3 +91,92 @@ The backend reads environment variables from `backend-api/src/main/resources/app
 
 - The backend container image is built via multi-stage Docker build in `backend-api/Dockerfile`.
 - For production, rotate all default credentials and externalize secrets.
+
+## CLI usage (backend module)
+
+The backend now exposes a Picocli-based CLI surface that runs in-process against the existing service layer (no HTTP controller calls).
+
+### Start CLI mode
+
+Use the `cli` profile and enable CLI execution:
+
+```bash
+java -jar backend-api/target/backend-api-0.0.1-SNAPSHOT.jar \
+  --spring.profiles.active=cli \
+  --jdeploy.cli.enabled=true \
+  ingest-manifest --file backend-api/src/test/resources/manifests/heterogeneous-topology.yaml
+```
+
+### Commands
+
+#### `ingest-manifest --file <path>`
+
+Ingests a YAML manifest via `ManifestIngestionService`.
+
+```bash
+java -jar backend-api/target/backend-api-0.0.1-SNAPSHOT.jar \
+  --spring.profiles.active=cli --jdeploy.cli.enabled=true \
+  ingest-manifest --file ./manifest.yml
+```
+
+#### `deployments-by-subnet --subnet <id-or-cidr> [--format TEXT|JSON]`
+
+Queries deployments mapped to nodes in the subnet via `TopologyQueryService`.
+
+```bash
+java -jar backend-api/target/backend-api-0.0.1-SNAPSHOT.jar \
+  --spring.profiles.active=cli --jdeploy.cli.enabled=true \
+  deployments-by-subnet --subnet 10.0.1.0/24 --format JSON
+```
+
+#### `impact-by-node --node <id-or-hostname> [--format TEXT|JSON]`
+
+Queries dependency impact records for the node via `TopologyQueryService`.
+
+```bash
+java -jar backend-api/target/backend-api-0.0.1-SNAPSHOT.jar \
+  --spring.profiles.active=cli --jdeploy.cli.enabled=true \
+  impact-by-node --node app-node-01 --format TEXT
+```
+
+#### `generate-diagram --system <id> --output <path>`
+
+Generates a PlantUML system deployment diagram and writes it to disk.
+
+```bash
+java -jar backend-api/target/backend-api-0.0.1-SNAPSHOT.jar \
+  --spring.profiles.active=cli --jdeploy.cli.enabled=true \
+  generate-diagram --system billing --output ./artifacts/billing.puml
+```
+
+### CLI authentication strategy
+
+CLI mode supports two auth modes:
+
+- `trusted` (default for `cli` profile): local trusted execution for operators on secured hosts.
+- `service-account`: requires CLI credentials on commands that mutate state (currently `ingest-manifest`).
+
+Configuration:
+
+- `JDEPLOY_CLI_AUTH_MODE` = `trusted` or `service-account`
+- `JDEPLOY_CLI_AUTH_USER`
+- `JDEPLOY_CLI_AUTH_PASSWORD`
+
+Example service-account execution:
+
+```bash
+export JDEPLOY_CLI_AUTH_MODE=service-account
+export JDEPLOY_CLI_AUTH_USER=cli-service
+export JDEPLOY_CLI_AUTH_PASSWORD=change-me
+
+java -jar backend-api/target/backend-api-0.0.1-SNAPSHOT.jar \
+  --spring.profiles.active=cli --jdeploy.cli.enabled=true \
+  ingest-manifest --file ./manifest.yml --auth-user cli-service --auth-password change-me
+```
+
+### Error cases
+
+- Missing required args, e.g. running `ingest-manifest` without `--file`, exits with argument validation errors.
+- Invalid `--format` values fail command parsing.
+- In `service-account` mode, missing or invalid `--auth-user/--auth-password` fails with authentication error.
+- `generate-diagram` fails when `--output` points to an unwritable location.

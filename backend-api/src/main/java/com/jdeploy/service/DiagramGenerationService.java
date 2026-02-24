@@ -20,13 +20,16 @@ public class DiagramGenerationService {
     private final ArtifactStorage artifactStorage;
     private final OperationMetricsService operationMetricsService;
     private final ObservationRegistry observationRegistry;
+    private final TopologyQueryService topologyQueryService;
 
     public DiagramGenerationService(ArtifactStorage artifactStorage,
                                     ObservationRegistry observationRegistry,
-                                    OperationMetricsService operationMetricsService) {
+                                    OperationMetricsService operationMetricsService,
+                                    TopologyQueryService topologyQueryService) {
         this.artifactStorage = Objects.requireNonNull(artifactStorage, "artifactStorage must not be null");
         this.observationRegistry = Objects.requireNonNull(observationRegistry, "observationRegistry must not be null");
         this.operationMetricsService = Objects.requireNonNull(operationMetricsService, "operationMetricsService must not be null");
+        this.topologyQueryService = Objects.requireNonNull(topologyQueryService, "topologyQueryService must not be null");
     }
 
     public ArtifactMetadata generateDeploymentDiagram(DeploymentManifestDto manifest) {
@@ -153,6 +156,29 @@ public class DiagramGenerationService {
         builder.append("  <<switch>> Network switch\n");
         builder.append("endlegend\n");
         builder.append("@enduml\n");
+        return builder.toString();
+    }
+
+
+    public String buildSystemPlantUml(String systemId) {
+        TopologyQueryService.SystemDiagramView systemDiagram = topologyQueryService.systemDiagram(systemId);
+        StringBuilder builder = new StringBuilder();
+        builder.append("@startuml\n");
+        builder.append("title System Deployment: ").append(systemDiagram.systemName()).append("\n\n");
+        builder.append("left to right direction\n\n");
+
+        builder.append("rectangle \"System: ").append(systemDiagram.systemName()).append("\" as system\n");
+        for (String component : systemDiagram.components()) {
+            String alias = "component_" + alias(component);
+            builder.append("component \"" ).append(component).append("\" as ").append(alias).append("\n");
+            builder.append("system --> ").append(alias).append("\n");
+        }
+
+        builder.append("\ncloud \"Target Nodes\" as nodes {\n");
+        for (String node : systemDiagram.targetNodes()) {
+            builder.append("  node \"" ).append(node).append("\" as node_").append(alias(node)).append("\n");
+        }
+        builder.append("}\n\n@enduml\n");
         return builder.toString();
     }
 
