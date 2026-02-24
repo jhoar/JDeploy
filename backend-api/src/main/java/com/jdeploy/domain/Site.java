@@ -12,11 +12,17 @@ import java.util.Set;
 @Node("Site")
 public class Site {
 
+    public enum SiteType {
+        SITE,
+        DATACENTER
+    }
+
     @Id
     @GeneratedValue
     private Long id;
 
     private String name;
+    private SiteType type;
 
     @Relationship(type = "HAS_SUBNET")
     private Set<Subnet> subnets = new HashSet<>();
@@ -25,7 +31,12 @@ public class Site {
     }
 
     public Site(String name) {
+        this(name, SiteType.SITE);
+    }
+
+    public Site(String name, SiteType type) {
         this.name = requireNonBlank(name, "name");
+        this.type = Objects.requireNonNull(type, "type must not be null");
     }
 
     public void addSubnet(Subnet subnet) {
@@ -38,6 +49,10 @@ public class Site {
 
     public String getName() {
         return name;
+    }
+
+    public SiteType getType() {
+        return type;
     }
 
     public Set<Subnet> getSubnets() {

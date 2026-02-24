@@ -14,4 +14,23 @@ public interface HardwareNodeRepository extends Neo4jRepository<HardwareNode, Lo
         RETURN n
         """)
     List<HardwareNode> findNodesWithoutSubnet();
+
+    @Query("""
+        MATCH (:Subnet {cidr: $subnetCidr})-[:CONTAINS_NODE]->(n:HardwareNode)
+        RETURN DISTINCT n
+        """)
+    List<HardwareNode> findNodesBySubnet(String subnetCidr);
+
+    @Query("""
+        MATCH (:SoftwareSystem {name: $systemName})-[:CLUSTER_MEMBER]->(n:HardwareNode)
+        RETURN DISTINCT n
+        """)
+    List<HardwareNode> findClusterMembersBySystemName(String systemName);
+
+    @Query("""
+        MATCH (failed:HardwareNode {hostname: $hostname})
+              <-[:CONNECTS_FROM|CONNECTS_TO]-(:NetworkLink)-[:CONNECTS_FROM|CONNECTS_TO]->(n:HardwareNode)
+        RETURN DISTINCT n
+        """)
+    List<HardwareNode> findNodesImpactedByNodeFailure(String hostname);
 }
