@@ -1,0 +1,13 @@
+spring:
+  config:
+    activate:
+      on-profile: cli
+
+jdeploy:
+  cli:
+    enabled: ${JDEPLOY_CLI_ENABLED:true}
+    auth:
+      mode: ${JDEPLOY_CLI_AUTH_MODE:trusted}
+      service-account:
+        username: ${JDEPLOY_CLI_AUTH_USER:cli-service}
+        password: ${JDEPLOY_CLI_AUTH_PASSWORD:cli-service-password}
