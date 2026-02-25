@@ -62,23 +62,43 @@ UI topology detail views depend on these backend routes being readable by all st
 
 Unauthenticated callers must receive `401 Unauthorized` for these routes. This contract is enforced by both URL security rules and controller method-level `@PreAuthorize` annotations.
 
-### UI configuration (`jdeploy.backend.base-url`)
+### UI configuration (`jdeploy.backend.*`)
 
-`vaadin-ui` uses `jdeploy.backend.base-url` to locate the backend API. Default value:
+`vaadin-ui` uses `jdeploy.backend.*` properties to locate and authenticate to `backend-api`.
 
-- `http://localhost:8080`
+Required/important properties:
 
-Set via environment variable:
+- `jdeploy.backend.base-url` (env: `JDEPLOY_BACKEND_BASE_URL`) — backend API URL (default `http://localhost:8080`).
+- `jdeploy.backend.auth.mode` (env: `JDEPLOY_BACKEND_AUTH_MODE`) — one of:
+  - `BASIC` (default): UI uses configured service credentials for every outbound backend call.
+  - `PROPAGATE`: UI forwards auth/session from the current logged-in request context.
+  - `NONE`: no outbound auth headers (useful only for local unsecured backends/tests).
+- `jdeploy.backend.auth.basic.username` (env: `JDEPLOY_BACKEND_AUTH_USERNAME`) — required when mode is `BASIC`.
+- `jdeploy.backend.auth.basic.password` (env: `JDEPLOY_BACKEND_AUTH_PASSWORD`) — required when mode is `BASIC`.
+- `jdeploy.backend.auth.propagation.source` (env: `JDEPLOY_BACKEND_AUTH_PROPAGATION_SOURCE`) — required when mode is `PROPAGATE`; one of:
+  - `REQUEST_AUTHORIZATION_HEADER` (default)
+  - `REQUEST_SESSION_COOKIE`
+  - `SECURITY_CONTEXT`
+
+Startup fail-fast behavior:
+
+- If `jdeploy.backend.auth.mode=BASIC` and username/password are missing or blank, `vaadin-ui` fails startup.
+
+Example (service-account style basic auth):
 
 ```bash
 export JDEPLOY_BACKEND_BASE_URL=http://localhost:8080
+export JDEPLOY_BACKEND_AUTH_MODE=BASIC
+export JDEPLOY_BACKEND_AUTH_USERNAME=reader
+export JDEPLOY_BACKEND_AUTH_PASSWORD=reader-password
 mvn -pl vaadin-ui spring-boot:run
 ```
 
 Or via command-line property:
 
 ```bash
-mvn -pl vaadin-ui spring-boot:run -Dspring-boot.run.arguments=--jdeploy.backend.base-url=http://localhost:9090
+mvn -pl vaadin-ui spring-boot:run \
+  -Dspring-boot.run.arguments="--jdeploy.backend.base-url=http://localhost:9090 --jdeploy.backend.auth.mode=BASIC --jdeploy.backend.auth.basic.username=reader --jdeploy.backend.auth.basic.password=reader-password"
 ```
 
 Local dev example with split ports (backend on `8080`, UI on `8081`):
