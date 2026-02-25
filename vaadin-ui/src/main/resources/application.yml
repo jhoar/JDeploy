@@ -1,0 +1,6 @@
+server:
+  port: ${SERVER_PORT:8081}
+
+jdeploy:
+  backend:
+    base-url: ${JDEPLOY_BACKEND_BASE_URL:http://localhost:8080}
