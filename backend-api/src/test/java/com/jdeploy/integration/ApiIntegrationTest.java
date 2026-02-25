@@ -21,6 +21,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
 import java.net.URI;
@@ -78,8 +79,12 @@ class ApiIntegrationTest {
         assertEquals(2L, countNodes("NetworkLink"));
 
         RestTemplate readClient = authenticatedClient("reader", "reader-password");
+        URI deploymentsUri = UriComponentsBuilder.fromHttpUrl("http://localhost:" + port + "/api/subnets/deployments")
+                .queryParam("subnetId", "10.10.0.0/24")
+                .build(true)
+                .toUri();
         ResponseEntity<List<Map<String, Object>>> deploymentsResponse = readClient.exchange(
-                URI.create("http://localhost:" + port + "/api/subnets/10.10.0.0%2F24/deployments"),
+                deploymentsUri,
                 HttpMethod.GET,
                 HttpEntity.EMPTY,
                 new ParameterizedTypeReference<>() {
@@ -114,8 +119,12 @@ class ApiIntegrationTest {
         RestTemplate ingestClient = authenticatedClient("ingest", "ingest-password");
         RestTemplate generatorClient = authenticatedClient("generator", "generator-password");
 
+        URI unauthorizedUri = UriComponentsBuilder.fromHttpUrl("http://localhost:" + port + "/api/subnets/deployments")
+                .queryParam("subnetId", "172.16.10.0/24")
+                .build(true)
+                .toUri();
         HttpClientErrorException.Unauthorized unauthorizedRead = assertThrows(HttpClientErrorException.Unauthorized.class,
-                () -> restTemplate.getForEntity(URI.create("http://localhost:" + port + "/api/subnets/172.16.10.0%2F24/deployments"), String.class));
+                () -> restTemplate.getForEntity(unauthorizedUri, String.class));
         assertEquals(HttpStatus.UNAUTHORIZED, unauthorizedRead.getStatusCode());
 
         HttpClientErrorException.Forbidden forbiddenIngest = assertThrows(HttpClientErrorException.Forbidden.class,

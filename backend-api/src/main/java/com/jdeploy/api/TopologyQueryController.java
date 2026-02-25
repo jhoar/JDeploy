@@ -15,6 +15,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -57,6 +58,19 @@ public class TopologyQueryController {
             @ApiResponse(responseCode = "403", description = "Insufficient privileges")
     })
     public List<DeploymentView> deploymentsInSubnet(@PathVariable String subnetId) {
+        return deploymentsBySubnet(subnetId);
+    }
+
+
+    @GetMapping("/subnets/deployments")
+    @PreAuthorize("hasAuthority('" + ApiRoles.READ_ONLY + "')")
+    @Operation(summary = "Show deployments in subnet (query parameter)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Deployments found", content = @Content(array = @ArraySchema(schema = @Schema(implementation = DeploymentView.class)))),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Insufficient privileges")
+    })
+    public List<DeploymentView> deploymentsInSubnetQuery(@RequestParam String subnetId) {
         return deploymentsBySubnet(subnetId);
     }
 
