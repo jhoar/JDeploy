@@ -45,32 +45,61 @@ jobs:
         with:
           category: /language:java
 
-  dependency-check:
-    name: Dependency Vulnerability Scan
+  trivy-vuln-scan:
+    name: Dependency Vulnerability Scan (Trivy)
     runs-on: ubuntu-latest
+    env:
+      TRIVY_CACHE_DIR: ~/.cache/trivy
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - name: Setup Trivy
+        uses: aquasecurity/setup-trivy@v0.2.2
         with:
-          distribution: temurin
-          java-version: '21'
+          version: v0.57.1
 
-      - name: OWASP Dependency-Check (SARIF)
+      - name: Generate cache key date
+        id: trivy-cache-key
+        run: echo "date=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Trivy DB
+        id: cache-trivy-db
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/trivy
+          key: trivy-db-${{ runner.os }}-${{ steps.trivy-cache-key.outputs.date }}
+          restore-keys: |
+            trivy-db-${{ runner.os }}-
+
+      - name: Update Trivy vulnerability database (cache miss only)
+        if: steps.cache-trivy-db.outputs.cache-hit != 'true'
+        run: trivy image --download-db-only
+
+      - name: Run Trivy filesystem scan for SARIF (all severities, non-blocking)
         run: |
-          mvn -B -ntp org.owasp:dependency-check-maven:check \
-            -Dformat=SARIF \
-            -Dout=./reports \
-            -DfailBuildOnCVSS=9
+          trivy fs \
+            --scanners vuln \
+            --severity LOW,MEDIUM,HIGH,CRITICAL \
+            --format sarif \
+            --output trivy-results.sarif \
+            --exit-code 0 \
+            .
 
-      - name: Upload Dependency-Check SARIF
+      - name: Enforce severe vulnerabilities only (HIGH,CRITICAL)
+        run: |
+          trivy fs \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            .
+
+      - name: Upload Trivy SARIF
         if: always()
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: reports/dependency-check-report.sarif
-          category: dependency-check
+          sarif_file: trivy-results.sarif
+          category: trivy-vuln-scan
 
   secret-scan:
     name: Secret Scan (Gitleaks)
