@@ -4,3 +4,10 @@ server:
 jdeploy:
   backend:
     base-url: ${JDEPLOY_BACKEND_BASE_URL:http://localhost:8080}
+    auth:
+      mode: ${JDEPLOY_BACKEND_AUTH_MODE:BASIC}
+      basic:
+        username: ${JDEPLOY_BACKEND_AUTH_USERNAME:reader}
+        password: ${JDEPLOY_BACKEND_AUTH_PASSWORD:reader-password}
+      propagation:
+        source: ${JDEPLOY_BACKEND_AUTH_PROPAGATION_SOURCE:REQUEST_AUTHORIZATION_HEADER}
