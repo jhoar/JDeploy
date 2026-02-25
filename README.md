@@ -7,6 +7,84 @@
 
 JDeploy is a Spring Boot backend API (with Vaadin UI module in this repository) backed by Neo4j.
 
+## Vaadin UI
+
+The `vaadin-ui` module is a dedicated Spring Boot Vaadin application. It is **standalone from the backend runtime** and communicates with `backend-api` over HTTP; it is not embedded inside the backend process.
+
+### Supported deployment topology
+
+- **Supported**: backend and UI as separate processes/containers (same host or different hosts).
+- **Supported**: backend only, without running UI.
+- **Not supported/documented for production**: running Vaadin UI embedded in `backend-api` as a single Spring Boot process.
+
+### Build and run
+
+Build the UI module (and required reactor dependencies):
+
+```bash
+mvn -pl vaadin-ui -am clean package
+```
+
+Run the UI directly from Maven:
+
+```bash
+mvn -pl vaadin-ui spring-boot:run
+```
+
+Run packaged UI jar:
+
+```bash
+java -jar vaadin-ui/target/vaadin-ui-0.0.1-SNAPSHOT.jar
+```
+
+By default, the UI is served on `http://localhost:8081` and uses Spring Security login.
+
+### Backend dependency and UI auth credentials
+
+The UI requires a reachable backend API (default `http://localhost:8080`) with users configured in `backend-api`.
+
+Default backend users and effective roles for UI operations:
+
+- `reader` / `reader-password` → read-only topology browsing.
+- `generator` / `generator-password` → diagram generation endpoints.
+- `ingest` / `ingest-password` → manifest ingestion endpoints.
+
+Use these backend credentials on the UI login screen; required permissions depend on features you access.
+
+### UI configuration (`jdeploy.backend.base-url`)
+
+`vaadin-ui` uses `jdeploy.backend.base-url` to locate the backend API. Default value:
+
+- `http://localhost:8080`
+
+Set via environment variable:
+
+```bash
+export JDEPLOY_BACKEND_BASE_URL=http://localhost:8080
+mvn -pl vaadin-ui spring-boot:run
+```
+
+Or via command-line property:
+
+```bash
+mvn -pl vaadin-ui spring-boot:run -Dspring-boot.run.arguments=--jdeploy.backend.base-url=http://localhost:9090
+```
+
+Local dev example with split ports (backend on `8080`, UI on `8081`):
+
+```bash
+mvn -pl backend-api spring-boot:run
+mvn -pl vaadin-ui spring-boot:run
+```
+
+Local dev example with backend on a custom port (`9090`) and UI on default port:
+
+```bash
+mvn -pl backend-api spring-boot:run -Dspring-boot.run.arguments=--server.port=9090
+mvn -pl vaadin-ui spring-boot:run -Dspring-boot.run.arguments=--jdeploy.backend.base-url=http://localhost:9090
+```
+
+
 ## Build executable package
 
 Build the backend runnable JAR:
