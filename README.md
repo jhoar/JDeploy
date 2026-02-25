@@ -1,5 +1,10 @@
 # JDeploy
 
+[![CI](https://img.shields.io/badge/CI-Primary%20workflow-2ea44f?logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
+[![Security Scans](https://img.shields.io/badge/Security-Scans-0969da?logo=githubactions&logoColor=white)](.github/workflows/security.yml)
+[![Container](https://img.shields.io/badge/Container-Build-8250df?logo=docker&logoColor=white)](.github/workflows/container.yml)
+[![Release](https://img.shields.io/badge/Release-Pipeline-f0883e?logo=githubactions&logoColor=white)](.github/workflows/release.yml)
+
 JDeploy is a Spring Boot backend API (with Vaadin UI module in this repository) backed by Neo4j.
 
 ## Build executable package
