@@ -182,10 +182,7 @@ class ApiIntegrationTest {
         ResponseEntity<String> nodeDetail = readClient.getForEntity("http://localhost:" + port + "/api/topology/nodes/edge-physical-01", String.class);
         assertEquals(HttpStatus.OK, nodeDetail.getStatusCode());
 
-        URI subnetDetailUri = UriComponentsBuilder.fromUriString("http://localhost:" + port + "/api/topology/subnets/{cidr}")
-                .buildAndExpand("172.16.10.0/24")
-                .encode()
-                .toUri();
+        URI subnetDetailUri = URI.create("http://localhost:" + port + "/api/topology/subnets/172.16.10.0%252F24");
         HttpClientErrorException.Unauthorized unauthorizedSubnetDetail = assertThrows(HttpClientErrorException.Unauthorized.class,
                 () -> restTemplate.getForEntity(subnetDetailUri, String.class));
         assertEquals(HttpStatus.UNAUTHORIZED, unauthorizedSubnetDetail.getStatusCode());
