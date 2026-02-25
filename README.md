@@ -43,13 +43,13 @@ By default, the UI is served on `http://localhost:8081` and uses Spring Security
 
 The UI requires a reachable backend API (default `http://localhost:8080`) with users configured in `backend-api`.
 
-Default backend users and effective roles for UI operations:
+Backend users and effective roles for UI operations are configured through environment variables/secrets.
 
-- `reader` / `reader-password` → read-only topology browsing.
-- `generator` / `generator-password` → diagram generation endpoints.
-- `ingest` / `ingest-password` → manifest ingestion endpoints.
+- `JDEPLOY_READER_USER` / `JDEPLOY_READER_PASSWORD` → read-only topology browsing.
+- `JDEPLOY_GENERATOR_USER` / `JDEPLOY_GENERATOR_PASSWORD` → diagram generation endpoints.
+- `JDEPLOY_INGEST_USER` / `JDEPLOY_INGEST_PASSWORD` → manifest ingestion endpoints.
 
-Use these backend credentials on the UI login screen; required permissions depend on features you access.
+Use the configured backend credentials on the UI login screen; required permissions depend on features you access.
 
 ### Topology detail endpoint access contract
 
@@ -89,8 +89,8 @@ Example (service-account style basic auth):
 ```bash
 export JDEPLOY_BACKEND_BASE_URL=http://localhost:8080
 export JDEPLOY_BACKEND_AUTH_MODE=BASIC
-export JDEPLOY_BACKEND_AUTH_USERNAME=reader
-export JDEPLOY_BACKEND_AUTH_PASSWORD=reader-password
+export JDEPLOY_BACKEND_AUTH_USERNAME=$JDEPLOY_READER_USER
+export JDEPLOY_BACKEND_AUTH_PASSWORD=$JDEPLOY_READER_PASSWORD
 mvn -pl vaadin-ui spring-boot:run
 ```
 
@@ -98,7 +98,7 @@ Or via command-line property:
 
 ```bash
 mvn -pl vaadin-ui spring-boot:run \
-  -Dspring-boot.run.arguments="--jdeploy.backend.base-url=http://localhost:9090 --jdeploy.backend.auth.mode=BASIC --jdeploy.backend.auth.basic.username=reader --jdeploy.backend.auth.basic.password=reader-password"
+  -Dspring-boot.run.arguments="--jdeploy.backend.base-url=http://localhost:9090 --jdeploy.backend.auth.mode=BASIC --jdeploy.backend.auth.basic.username=${JDEPLOY_READER_USER} --jdeploy.backend.auth.basic.password=${JDEPLOY_READER_PASSWORD}"
 ```
 
 Local dev example with split ports (backend on `8080`, UI on `8081`):
@@ -189,22 +189,32 @@ The backend reads environment variables from `backend-api/src/main/resources/app
 | `NEO4J_URI` | `bolt://localhost:7687` | Neo4j Bolt URI |
 | `NEO4J_USERNAME` | `neo4j` | Neo4j username |
 | `NEO4J_PASSWORD` | `changeit` | Neo4j password |
-| `SPRING_SECURITY_DEFAULT_USER` | `admin` | HTTP basic admin username |
-| `SPRING_SECURITY_DEFAULT_PASSWORD` | `admin-change-me` | HTTP basic admin password |
-| `JDEPLOY_INGEST_USER` | `ingest` | Ingestion role username |
-| `JDEPLOY_INGEST_PASSWORD` | `ingest-password` | Ingestion role password |
-| `JDEPLOY_GENERATOR_USER` | `generator` | Diagram generation role username |
-| `JDEPLOY_GENERATOR_PASSWORD` | `generator-password` | Diagram generation role password |
-| `JDEPLOY_READER_USER` | `reader` | Read-only role username |
-| `JDEPLOY_READER_PASSWORD` | `reader-password` | Read-only role password |
+| `JDEPLOY_INGEST_USER` | _required_ | Ingestion role username |
+| `JDEPLOY_INGEST_PASSWORD` | _required secret_ | Ingestion role password |
+| `JDEPLOY_GENERATOR_USER` | _required_ | Diagram generation role username |
+| `JDEPLOY_GENERATOR_PASSWORD` | _required secret_ | Diagram generation role password |
+| `JDEPLOY_READER_USER` | _required_ | Read-only role username |
+| `JDEPLOY_READER_PASSWORD` | _required secret_ | Read-only role password |
 | `JDEPLOY_UML_OUTPUT_PATH` | profile-specific path | PlantUML output directory |
 | `JDEPLOY_QUALITY_REPORTING_ENABLED` | `true` | Enables quality reporting scheduler |
 | `JDEPLOY_QUALITY_REPORTING_CRON` | `0 */15 * * * *` | Scheduler cron |
 
+
+### Required backend auth credentials
+
+The backend now fails fast at startup when any `JDEPLOY_*` API credential is missing/blank. Password policy checks are enabled by default and require:
+
+- minimum length: `12` characters (`JDEPLOY_SECURITY_PASSWORD_POLICY_MIN_LENGTH` / `jdeploy.security.password-policy.min-length`)
+- at least `3` character classes among lowercase, uppercase, digits, symbols (`JDEPLOY_SECURITY_PASSWORD_POLICY_MIN_CHARACTER_CLASSES` / `jdeploy.security.password-policy.min-character-classes`)
+
+Disable enforcement only if necessary with `JDEPLOY_SECURITY_PASSWORD_POLICY_ENFORCE=false` (`jdeploy.security.password-policy.enforce=false`).
+
+Use `.env.example` as a template for required Compose variables.
+
 ## Notes
 
 - The backend container image is built via multi-stage Docker build in `backend-api/Dockerfile`.
-- For production, rotate all default credentials and externalize secrets.
+- For production, provide all required credentials through environment variables or secret managers (no in-app credential fallbacks).
 
 ## Branch protection policy (`main`)
 
