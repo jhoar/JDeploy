@@ -215,16 +215,24 @@ jobs:
 
             if [[ "$startup_status" == "pass" ]]; then
               docker pull "$image_ref"
+
+              smoke_reader_user="smoke-reader"
+              smoke_generator_user="smoke-generator"
+              smoke_ingest_user="smoke-ingest"
+              smoke_reader_password=$(openssl rand -hex 16)
+              smoke_generator_password=$(openssl rand -hex 16)
+              smoke_ingest_password=$(openssl rand -hex 16)
+
               docker run -d --name verify-app --network post-release-verify -p 18080:8080 \
                 -e SPRING_NEO4J_URI=bolt://verify-neo4j:7687 \
                 -e SPRING_NEO4J_AUTHENTICATION_USERNAME=neo4j \
                 -e SPRING_NEO4J_AUTHENTICATION_PASSWORD=changeit \
-                -e JDEPLOY_SECURITY_USERS_READER_USERNAME=reader \
-                -e JDEPLOY_SECURITY_USERS_READER_PASSWORD=reader-password \
-                -e JDEPLOY_SECURITY_USERS_GENERATOR_USERNAME=generator \
-                -e JDEPLOY_SECURITY_USERS_GENERATOR_PASSWORD=generator-password \
-                -e JDEPLOY_SECURITY_USERS_INGEST_USERNAME=ingest \
-                -e JDEPLOY_SECURITY_USERS_INGEST_PASSWORD=ingest-password \
+                -e JDEPLOY_SECURITY_USERS_READER_USERNAME=${smoke_reader_user} \
+                -e JDEPLOY_SECURITY_USERS_READER_PASSWORD=${smoke_reader_password} \
+                -e JDEPLOY_SECURITY_USERS_GENERATOR_USERNAME=${smoke_generator_user} \
+                -e JDEPLOY_SECURITY_USERS_GENERATOR_PASSWORD=${smoke_generator_password} \
+                -e JDEPLOY_SECURITY_USERS_INGEST_USERNAME=${smoke_ingest_user} \
+                -e JDEPLOY_SECURITY_USERS_INGEST_PASSWORD=${smoke_ingest_password} \
                 "$image_ref" >/dev/null
 
               app_ready=false
@@ -250,7 +258,8 @@ jobs:
                 fi
 
                 unauth_code=$(curl --silent --show-error --output /tmp/unauth.out --write-out '%{http_code}' http://localhost:18080/api/topology/systems || true)
-                auth_code=$(curl --silent --show-error --output verification/topology-systems.json --write-out '%{http_code}' -u reader:reader-password http://localhost:18080/api/topology/systems || true)
+                auth_header=$(printf '%s:%s' "${smoke_reader_user}" "${smoke_reader_password}" | base64 -w 0)
+                auth_code=$(curl --silent --show-error --output verification/topology-systems.json --write-out '%{http_code}' -H "Authorization: Basic ${auth_header}" http://localhost:18080/api/topology/systems || true)
 
                 if [[ "$unauth_code" != "401" ]]; then
                   auth_status="fail"
