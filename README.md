@@ -92,6 +92,22 @@ The backend reads environment variables from `backend-api/src/main/resources/app
 - The backend container image is built via multi-stage Docker build in `backend-api/Dockerfile`.
 - For production, rotate all default credentials and externalize secrets.
 
+## Branch protection policy (`main`)
+
+Configure repository rules for `main` with the following settings:
+
+1. **Require pull requests before merging** (disallow direct pushes).
+2. **Require status checks to pass before merging** and include all of:
+   - `quality`
+   - `integration-tests`
+   - `build`
+   - `security`
+3. **Require branches to be up to date before merging**.
+4. **Require at least 1 approval** and **dismiss stale pull request approvals when new commits are pushed**.
+5. Optional but recommended:
+   - **Require signed commits**
+   - **Require linear history**
+
 ## CLI usage (backend module)
 
 The backend now exposes a Picocli-based CLI surface that runs in-process against the existing service layer (no HTTP controller calls).
