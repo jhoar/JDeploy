@@ -89,7 +89,7 @@ jobs:
 
       - name: Run unit tests only
         run: |
-          mvn ${MAVEN_CLI_OPTS} -pl ${{ matrix.module }} -am test -DskipITs=true -DskipIT=true -Dfailsafe.skipITs=true -Dtest='!*IntegrationTest'
+          mvn ${MAVEN_CLI_OPTS} -pl ${{ matrix.module }} -am test -DskipITs=true -DskipIT=true -Dfailsafe.skipITs=true -Dtest='!*IntegrationTest' -Dsurefire.failIfNoSpecifiedTests=false
 
       - name: Upload JUnit XML reports
         if: always()
