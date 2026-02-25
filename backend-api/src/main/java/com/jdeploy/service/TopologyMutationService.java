@@ -113,13 +113,18 @@ public class TopologyMutationService {
                 MATCH (n:HardwareNode {hostname: $hostname})
                 OPTIONAL MATCH (d)-[oldEnv:TARGET_ENVIRONMENT]->(:ExecutionEnvironment)
                 OPTIONAL MATCH (d)-[oldNode:TARGET_NODE]->(:HardwareNode)
-                OPTIONAL MATCH (d)-[oldTargets:TARGETS]->(oldTarget)
-                WHERE oldTarget:ExecutionEnvironment OR oldTarget:HardwareNode
-                DELETE oldEnv, oldNode, oldTargets
-                CREATE (d)-[:TARGET_ENVIRONMENT]->(e)
-                CREATE (d)-[:TARGET_NODE]->(n)
-                CREATE (d)-[:TARGETS]->(e)
-                CREATE (d)-[:TARGETS]->(n)
+                OPTIONAL MATCH (d)-[oldTargetsEnv:TARGETS]->(:ExecutionEnvironment)
+                OPTIONAL MATCH (d)-[oldTargetsNode:TARGETS]->(:HardwareNode)
+                WITH d, e, n,
+                     collect(DISTINCT oldEnv)
+                     + collect(DISTINCT oldNode)
+                     + collect(DISTINCT oldTargetsEnv)
+                     + collect(DISTINCT oldTargetsNode) AS relsToDelete
+                FOREACH (rel IN relsToDelete | DELETE rel)
+                MERGE (d)-[:TARGET_ENVIRONMENT]->(e)
+                MERGE (d)-[:TARGET_NODE]->(n)
+                MERGE (d)-[:TARGETS]->(e)
+                MERGE (d)-[:TARGETS]->(n)
                 SET d.deploymentKey = $newKey
                 """)
                 .bind(currentDeploymentKey).to("current")
