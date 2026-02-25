@@ -7,6 +7,11 @@
 
 JDeploy is a Spring Boot backend API (with Vaadin UI module in this repository) backed by Neo4j.
 
+## User guide
+
+For complete installation and runtime instructions for both backend and Vaadin UI, see [`docs/user-guide.md`](docs/user-guide.md).
+
+
 ## Build executable package
 
 Build the backend runnable JAR:
