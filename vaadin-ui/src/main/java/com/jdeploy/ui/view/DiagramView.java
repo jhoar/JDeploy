@@ -1,8 +1,10 @@
 package com.jdeploy.ui.view;
 
 import com.jdeploy.artifact.ArtifactMetadata;
+import com.jdeploy.security.ApiRoles;
 import com.jdeploy.ui.client.ArtifactApiClient;
 import com.jdeploy.ui.client.TopologyApiClient;
+import com.jdeploy.ui.security.VaadinActionAuthorizationService;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.html.Anchor;
@@ -13,14 +15,16 @@ import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
-import jakarta.annotation.security.PermitAll;
+import jakarta.annotation.security.RolesAllowed;
 
 @Route(value = "diagram", layout = MainLayout.class)
 @PageTitle("Diagram")
-@PermitAll
+@RolesAllowed({ApiRoles.ARTIFACT_GENERATE, ApiRoles.READ_ONLY})
 public class DiagramView extends VerticalLayout {
 
-    public DiagramView(TopologyApiClient topologyApiClient, ArtifactApiClient artifactApiClient) {
+    public DiagramView(TopologyApiClient topologyApiClient,
+                       ArtifactApiClient artifactApiClient,
+                       VaadinActionAuthorizationService authorizationService) {
         add(new H3("Diagram Generator"));
 
         ComboBox<String> systemSelector = new ComboBox<>("System");
@@ -37,6 +41,7 @@ public class DiagramView extends VerticalLayout {
 
         Button generate = new Button("Generate", e -> {
             try {
+                authorizationService.assertCanGenerateArtifacts();
                 if (manifestYaml.getValue().isBlank()) {
                     Notification.show("Provide manifest YAML.");
                     return;

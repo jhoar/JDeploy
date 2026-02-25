@@ -1,5 +1,6 @@
 package com.jdeploy.ui.view;
 
+import com.jdeploy.security.ApiRoles;
 import com.jdeploy.ui.client.TopologyApiClient;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.grid.Grid;
@@ -12,13 +13,13 @@ import com.vaadin.flow.component.tabs.Tabs;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
-import jakarta.annotation.security.PermitAll;
+import jakarta.annotation.security.RolesAllowed;
 
 import java.util.List;
 
 @Route(value = "infrastructure", layout = MainLayout.class)
 @PageTitle("Infrastructure Explorer")
-@PermitAll
+@RolesAllowed({ApiRoles.READ_ONLY, ApiRoles.EDITOR, ApiRoles.ADMIN})
 public class InfrastructureExplorerView extends VerticalLayout {
 
     public InfrastructureExplorerView(TopologyApiClient topologyApiClient) {
