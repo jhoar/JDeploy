@@ -51,6 +51,17 @@ Default backend users and effective roles for UI operations:
 
 Use these backend credentials on the UI login screen; required permissions depend on features you access.
 
+### Topology detail endpoint access contract
+
+UI topology detail views depend on these backend routes being readable by all standard read-capable API roles (`READ_ONLY`, `EDITOR`, `ADMIN`):
+
+- `GET /api/topology/systems/{name}`
+- `GET /api/topology/nodes/{hostname}`
+- `GET /api/topology/subnets/{cidr}`
+- `GET /api/topology/environments/{name}`
+
+Unauthenticated callers must receive `401 Unauthorized` for these routes. This contract is enforced by both URL security rules and controller method-level `@PreAuthorize` annotations.
+
 ### UI configuration (`jdeploy.backend.base-url`)
 
 `vaadin-ui` uses `jdeploy.backend.base-url` to locate the backend API. Default value:

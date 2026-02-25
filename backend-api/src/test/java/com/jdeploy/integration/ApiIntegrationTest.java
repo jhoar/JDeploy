@@ -154,6 +154,48 @@ class ApiIntegrationTest {
         assertEquals(HttpStatus.FORBIDDEN, forbiddenGenerateForReader.getStatusCode());
     }
 
+
+
+    @Test
+    void topologyDetailRoutesRequireAuthenticationAndAllowReadAuthorities() {
+        String yaml = manifest("edge-regional-topology.yaml");
+        RestTemplate ingestClient = authenticatedClient("ingest", "ingest-password");
+        RestTemplate readClient = authenticatedClient("reader", "reader-password");
+
+        ResponseEntity<ManifestController.OperationResult> ingestResponse = ingestClient.postForEntity(
+                "http://localhost:" + port + "/api/manifests/ingest",
+                yaml,
+                ManifestController.OperationResult.class);
+        assertEquals(HttpStatus.OK, ingestResponse.getStatusCode());
+
+        HttpClientErrorException.Unauthorized unauthorizedSystemDetail = assertThrows(HttpClientErrorException.Unauthorized.class,
+                () -> restTemplate.getForEntity("http://localhost:" + port + "/api/topology/systems/edge-gateway", String.class));
+        assertEquals(HttpStatus.UNAUTHORIZED, unauthorizedSystemDetail.getStatusCode());
+
+        ResponseEntity<String> systemDetail = readClient.getForEntity("http://localhost:" + port + "/api/topology/systems/edge-gateway", String.class);
+        assertEquals(HttpStatus.OK, systemDetail.getStatusCode());
+
+        HttpClientErrorException.Unauthorized unauthorizedNodeDetail = assertThrows(HttpClientErrorException.Unauthorized.class,
+                () -> restTemplate.getForEntity("http://localhost:" + port + "/api/topology/nodes/edge-app-01", String.class));
+        assertEquals(HttpStatus.UNAUTHORIZED, unauthorizedNodeDetail.getStatusCode());
+
+        ResponseEntity<String> nodeDetail = readClient.getForEntity("http://localhost:" + port + "/api/topology/nodes/edge-app-01", String.class);
+        assertEquals(HttpStatus.OK, nodeDetail.getStatusCode());
+
+        HttpClientErrorException.Unauthorized unauthorizedSubnetDetail = assertThrows(HttpClientErrorException.Unauthorized.class,
+                () -> restTemplate.getForEntity("http://localhost:" + port + "/api/topology/subnets/172.16.10.0%2F24", String.class));
+        assertEquals(HttpStatus.UNAUTHORIZED, unauthorizedSubnetDetail.getStatusCode());
+
+        ResponseEntity<String> subnetDetail = readClient.getForEntity("http://localhost:" + port + "/api/topology/subnets/172.16.10.0%2F24", String.class);
+        assertEquals(HttpStatus.OK, subnetDetail.getStatusCode());
+
+        HttpClientErrorException.Unauthorized unauthorizedEnvironmentDetail = assertThrows(HttpClientErrorException.Unauthorized.class,
+                () -> restTemplate.getForEntity("http://localhost:" + port + "/api/topology/environments/edge-prod", String.class));
+        assertEquals(HttpStatus.UNAUTHORIZED, unauthorizedEnvironmentDetail.getStatusCode());
+
+        ResponseEntity<String> environmentDetail = readClient.getForEntity("http://localhost:" + port + "/api/topology/environments/edge-prod", String.class);
+        assertEquals(HttpStatus.OK, environmentDetail.getStatusCode());
+    }
     @Test
     void artifactGenerationAndDownloadEnforceAuthorities() {
         String yaml = manifest("heterogeneous-topology.yaml");

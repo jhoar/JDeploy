@@ -73,6 +73,7 @@ public class TopologyController {
     }
 
     @GetMapping("/systems/{name}")
+    @PreAuthorize("hasAnyAuthority('" + ApiRoles.READ_ONLY + "','" + ApiRoles.EDITOR + "','" + ApiRoles.ADMIN + "')")
     public TopologyUpdateDtos.SoftwareSystemUpdateRequest system(@PathVariable String name) {
         return neo4jClient.query("MATCH (s:SoftwareSystem {name: $name}) RETURN s.name as name")
                 .bind(name).to("name")
@@ -82,6 +83,7 @@ public class TopologyController {
     }
 
     @GetMapping("/nodes/{hostname}")
+    @PreAuthorize("hasAnyAuthority('" + ApiRoles.READ_ONLY + "','" + ApiRoles.EDITOR + "','" + ApiRoles.ADMIN + "')")
     public TopologyUpdateDtos.HardwareNodeUpdateRequest node(@PathVariable String hostname) {
         return neo4jClient.query("MATCH (n:HardwareNode {hostname: $hostname}) RETURN n.type as type, n.hostname as hostname, n.ipAddress as ipAddress, n.roles as roles")
                 .bind(hostname).to("hostname")
@@ -96,6 +98,7 @@ public class TopologyController {
     }
 
     @GetMapping("/subnets/{cidr}")
+    @PreAuthorize("hasAnyAuthority('" + ApiRoles.READ_ONLY + "','" + ApiRoles.EDITOR + "','" + ApiRoles.ADMIN + "')")
     public TopologyUpdateDtos.SubnetUpdateRequest subnet(@PathVariable String cidr) {
         return neo4jClient.query("MATCH (s:Subnet {cidr: $cidr}) RETURN s.cidr as cidr, s.vlan as vlan, s.routingZone as routingZone")
                 .bind(cidr).to("cidr")
@@ -105,6 +108,7 @@ public class TopologyController {
     }
 
     @GetMapping("/environments/{name}")
+    @PreAuthorize("hasAnyAuthority('" + ApiRoles.READ_ONLY + "','" + ApiRoles.EDITOR + "','" + ApiRoles.ADMIN + "')")
     public TopologyUpdateDtos.ExecutionEnvironmentUpdateRequest environment(@PathVariable String name) {
         return neo4jClient.query("MATCH (e:ExecutionEnvironment {name: $name}) RETURN e.name as name, e.type as type")
                 .bind(name).to("name")
