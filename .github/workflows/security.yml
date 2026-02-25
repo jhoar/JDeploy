@@ -33,10 +33,12 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: java
+          build-mode: manual
           queries: security-and-quality
 
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+      - name: Build Java modules for CodeQL
+        run: |
+          mvn -B -ntp -DskipTests -Dspring-boot.repackage.skip=true -pl vaadin-ui -am compile
 
       - name: Analyze
         uses: github/codeql-action/analyze@v3
