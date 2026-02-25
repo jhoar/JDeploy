@@ -8,7 +8,7 @@ COPY backend-api/pom.xml backend-api/pom.xml
 COPY vaadin-ui/pom.xml vaadin-ui/pom.xml
 COPY backend-api/src backend-api/src
 
-RUN mvn -pl backend-api -am -DskipTests package
+RUN mvn -pl backend-api -am -DskipTests -Dspring-boot.mainClass=com.jdeploy.JDeployApplication package
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
