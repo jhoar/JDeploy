@@ -79,7 +79,7 @@ class ApiIntegrationTest {
         assertEquals(2L, countNodes("NetworkLink"));
 
         RestTemplate readClient = authenticatedClient("reader", "reader-password");
-        URI deploymentsUri = UriComponentsBuilder.fromHttpUrl("http://localhost:" + port + "/api/subnets/deployments")
+        URI deploymentsUri = UriComponentsBuilder.fromUriString("http://localhost:" + port + "/api/subnets/deployments")
                 .queryParam("subnetId", "10.10.0.0/24")
                 .build(true)
                 .toUri();
@@ -119,7 +119,7 @@ class ApiIntegrationTest {
         RestTemplate ingestClient = authenticatedClient("ingest", "ingest-password");
         RestTemplate generatorClient = authenticatedClient("generator", "generator-password");
 
-        URI unauthorizedUri = UriComponentsBuilder.fromHttpUrl("http://localhost:" + port + "/api/subnets/deployments")
+        URI unauthorizedUri = UriComponentsBuilder.fromUriString("http://localhost:" + port + "/api/subnets/deployments")
                 .queryParam("subnetId", "172.16.10.0/24")
                 .build(true)
                 .toUri();
