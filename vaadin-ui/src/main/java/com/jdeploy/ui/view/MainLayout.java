@@ -27,7 +27,9 @@ public class MainLayout extends AppLayout {
         if (authorities.contains(ApiRoles.TOPOLOGY_INGEST)) {
             sideNav.addItem(new SideNavItem("Manifest Ingest", ManifestIngestView.class));
         }
-        if (authorities.contains(ApiRoles.READ_ONLY)) {
+        if (authorities.contains(ApiRoles.READ_ONLY)
+                || authorities.contains(ApiRoles.EDITOR)
+                || authorities.contains(ApiRoles.ADMIN)) {
             sideNav.addItem(new SideNavItem("Infrastructure Explorer", InfrastructureExplorerView.class));
         }
         if (authorities.contains(ApiRoles.ARTIFACT_GENERATE) || authorities.contains(ApiRoles.READ_ONLY)) {

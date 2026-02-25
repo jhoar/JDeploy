@@ -1,6 +1,7 @@
 package com.jdeploy.ui.view;
 
 import com.jdeploy.security.ApiRoles;
+import com.jdeploy.ui.security.VaadinActionAuthorizationService;
 import com.jdeploy.ui.client.ManifestApiClient;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.html.H3;
@@ -12,18 +13,18 @@ import com.vaadin.flow.component.upload.Upload;
 import com.vaadin.flow.component.upload.receivers.MemoryBuffer;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
-import jakarta.annotation.security.PermitAll;
-import org.springframework.security.access.AccessDeniedException;
+import jakarta.annotation.security.RolesAllowed;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 @Route(value = "manifests/ingest", layout = MainLayout.class)
 @PageTitle("Manifest Ingest")
-@PermitAll
+@RolesAllowed(ApiRoles.TOPOLOGY_INGEST)
 public class ManifestIngestView extends VerticalLayout {
 
-    public ManifestIngestView(ManifestApiClient manifestApiClient) {
+    public ManifestIngestView(ManifestApiClient manifestApiClient,
+                              VaadinActionAuthorizationService authorizationService) {
         add(new H3("Manifest Ingest"));
 
         TextArea yamlInput = new TextArea("Paste manifest YAML");
@@ -45,6 +46,7 @@ public class ManifestIngestView extends VerticalLayout {
         Pre resultPanel = new Pre("Submit a manifest to see ingest details.");
         Button submit = new Button("Submit", event -> {
             try {
+                authorizationService.assertCanSubmitTopology();
                 if (yamlInput.getValue().isBlank()) {
                     Notification.show("Provide a YAML file or paste manifest text first.");
                     return;
@@ -52,8 +54,6 @@ public class ManifestIngestView extends VerticalLayout {
                 ManifestApiClient.ManifestIngestResult result = manifestApiClient.ingest(yamlInput.getValue());
                 resultPanel.setText("status: " + result.status() + "\ncreated: " + safe(result.created()) +
                         "\nupdated: " + safe(result.updated()) + "\nerrors: " + safe(result.errors()));
-            } catch (AccessDeniedException denied) {
-                resultPanel.setText("status: FAILED\ncreated: n/a\nupdated: n/a\nerrors: Access denied for role " + ApiRoles.TOPOLOGY_INGEST);
             } catch (Exception ex) {
                 resultPanel.setText("status: FAILED\ncreated: n/a\nupdated: n/a\nerrors: " + ex.getMessage());
             }

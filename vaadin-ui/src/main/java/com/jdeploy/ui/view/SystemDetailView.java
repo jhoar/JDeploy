@@ -2,6 +2,7 @@ package com.jdeploy.ui.view;
 
 import com.jdeploy.security.ApiRoles;
 import com.jdeploy.ui.client.TopologyApiClient;
+import com.jdeploy.ui.security.VaadinActionAuthorizationService;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.html.H3;
@@ -14,29 +15,24 @@ import com.vaadin.flow.router.HasUrlParameter;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.WildcardParameter;
-import com.vaadin.flow.spring.security.AuthenticationContext;
-import jakarta.annotation.security.PermitAll;
-
-import java.util.Set;
-import java.util.stream.Collectors;
+import jakarta.annotation.security.RolesAllowed;
 
 @Route(value = "infrastructure/system", layout = MainLayout.class)
 @PageTitle("System Detail")
-@PermitAll
+@RolesAllowed({ApiRoles.EDITOR, ApiRoles.ADMIN})
 public class SystemDetailView extends VerticalLayout implements HasUrlParameter<String> {
     private final TopologyApiClient apiClient;
+    private final VaadinActionAuthorizationService authorizationService;
     private final TextField name = new TextField("System name");
     private final Button save = new Button("Save");
     private final Button cancel = new Button("Cancel");
     private final BeanValidationBinder<TopologyApiClient.SoftwareSystemUpdateRequest> binder = new BeanValidationBinder<>(TopologyApiClient.SoftwareSystemUpdateRequest.class);
     private String original;
 
-    public SystemDetailView(TopologyApiClient apiClient, AuthenticationContext auth) {
+    public SystemDetailView(TopologyApiClient apiClient, VaadinActionAuthorizationService authorizationService) {
         this.apiClient = apiClient;
-        boolean canEdit = authorities(auth).stream().anyMatch(a -> a.equals(ApiRoles.EDITOR) || a.equals(ApiRoles.ADMIN));
+        this.authorizationService = authorizationService;
         binder.bind(name, TopologyApiClient.SoftwareSystemUpdateRequest::name, null);
-        save.setEnabled(canEdit);
-        name.setReadOnly(!canEdit);
 
         save.addClickListener(e -> {
             if (name.isInvalid() || name.isEmpty()) {
@@ -45,6 +41,7 @@ public class SystemDetailView extends VerticalLayout implements HasUrlParameter<
                 return;
             }
             try {
+                authorizationService.assertCanEditTopology();
                 apiClient.updateSystem(original, new TopologyApiClient.SoftwareSystemUpdateRequest(name.getValue()));
                 original = name.getValue();
                 Notification.show("System updated");
@@ -69,11 +66,5 @@ public class SystemDetailView extends VerticalLayout implements HasUrlParameter<
             Notification.show("Failed to load system: " + ex.getMessage(), 4000, Notification.Position.MIDDLE);
             name.setValue(original);
         }
-    }
-
-    private Set<String> authorities(AuthenticationContext auth) {
-        return auth.getAuthenticatedUser(org.springframework.security.core.userdetails.UserDetails.class)
-                .map(user -> user.getAuthorities().stream().map(Object::toString).collect(Collectors.toSet()))
-                .orElse(Set.of());
     }
 }
