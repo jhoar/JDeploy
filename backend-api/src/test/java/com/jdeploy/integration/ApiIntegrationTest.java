@@ -94,7 +94,7 @@ class ApiIntegrationTest {
         assertFalse(deploymentsResponse.getBody().isEmpty());
 
         ResponseEntity<Map<String, Object>> systemDiagramResponse = readClient.exchange(
-                "http://localhost:" + port + "/api/systems/Billing/diagram",
+                "http://localhost:" + port + "/api/diagrams/system/Billing",
                 HttpMethod.GET,
                 HttpEntity.EMPTY,
                 new ParameterizedTypeReference<>() {
