@@ -182,12 +182,17 @@ class ApiIntegrationTest {
         ResponseEntity<String> nodeDetail = readClient.getForEntity("http://localhost:" + port + "/api/topology/nodes/edge-physical-01", String.class);
         assertEquals(HttpStatus.OK, nodeDetail.getStatusCode());
 
-        URI subnetDetailUri = URI.create("http://localhost:" + port + "/api/topology/subnets/172.16.10.0%252F24");
+        String subnetWithoutSlash = "edge-10-test";
+        neo4jClient.query("CREATE (:Subnet {cidr: $cidr, vlan: 'edge-test', routingZone: 'edge-test-zone'})")
+                .bind(subnetWithoutSlash).to("cidr")
+                .run();
+
+        String subnetDetailUrl = "http://localhost:" + port + "/api/topology/subnets/" + subnetWithoutSlash;
         HttpClientErrorException.Unauthorized unauthorizedSubnetDetail = assertThrows(HttpClientErrorException.Unauthorized.class,
-                () -> restTemplate.getForEntity(subnetDetailUri, String.class));
+                () -> restTemplate.getForEntity(subnetDetailUrl, String.class));
         assertEquals(HttpStatus.UNAUTHORIZED, unauthorizedSubnetDetail.getStatusCode());
 
-        ResponseEntity<String> subnetDetail = readClient.getForEntity(subnetDetailUri, String.class);
+        ResponseEntity<String> subnetDetail = readClient.getForEntity(subnetDetailUrl, String.class);
         assertEquals(HttpStatus.OK, subnetDetail.getStatusCode());
 
         HttpClientErrorException.Unauthorized unauthorizedEnvironmentDetail = assertThrows(HttpClientErrorException.Unauthorized.class,
