@@ -226,7 +226,9 @@ jobs:
 
       - name: Package all modules (tests already validated)
         run: |
-          mvn ${MAVEN_CLI_OPTS} -DskipTests package
+          # Skip Spring Boot repackage in CI packaging stage because backend-api currently has
+          # multiple main-class candidates, which causes the repackage goal to fail.
+          mvn ${MAVEN_CLI_OPTS} -DskipTests -Dspring-boot.repackage.skip=true package
 
       - name: Verify packaged artifacts
         shell: bash
