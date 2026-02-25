@@ -258,6 +258,126 @@ class ApiIntegrationTest {
         assertTrue(findings.get("softwareLinkedToMissingEnvironment").stream().anyMatch(v -> v.contains("billing-api")));
     }
 
+
+
+    @Test
+    void deploymentUpdatePreservesCanonicalKeyAndRewritesTargets() {
+        String yaml = """
+                subnets:
+                  - cidr: 10.0.0.0/24
+                    vlan: 100
+                    routingZone: core
+                    nodes:
+                      - hostname: app-1
+                        ipAddress: 10.0.0.11
+                        type: VIRTUAL_MACHINE
+                        roles: [app]
+                      - hostname: app-2
+                        ipAddress: 10.0.0.12
+                        type: VIRTUAL_MACHINE
+                        roles: [app]
+                environments:
+                  - name: prod
+                    type: PRODUCTION
+                  - name: dr
+                    type: STAGING
+                systems:
+                  - name: Billing
+                    components:
+                      - name: billing-api
+                        version: 1.0.0
+                        deployments:
+                          - environment: prod
+                            hostname: app-1
+                      - name: billing-worker
+                        version: 1.0.0
+                        deployments:
+                          - environment: prod
+                            hostname: app-1
+                links: []
+                """;
+
+        RestTemplate ingestClient = authenticatedClient("ingest", "ingest-password");
+        ResponseEntity<String> ingestResponse = ingestClient.postForEntity(
+                "http://localhost:" + port + "/api/manifests/ingest",
+                yaml,
+                String.class);
+        assertEquals(HttpStatus.OK, ingestResponse.getStatusCode());
+
+        String currentKey = "prod@app-1:billing-api:1.0.0";
+        ResponseEntity<String> updateResponse = ingestClient.exchange(
+                deploymentUpdateUri(currentKey),
+                HttpMethod.PUT,
+                new HttpEntity<>(Map.of("targetEnvironmentName", "dr", "targetHostname", "app-2")),
+                String.class);
+        assertEquals(HttpStatus.OK, updateResponse.getStatusCode());
+
+        String updatedKey = "dr@app-2:billing-api:1.0.0";
+        assertEquals(1L, countDeploymentsByKey(updatedKey));
+        assertEquals(0L, countDeploymentsByKey(currentKey));
+        assertEquals(1L, countDeploymentsByKey("prod@app-1:billing-worker:1.0.0"));
+
+        assertEquals(0L, countTargetRelationship(updatedKey, "TARGETS", "ExecutionEnvironment", "prod"));
+        assertEquals(0L, countTargetRelationship(updatedKey, "TARGETS", "HardwareNode", "app-1"));
+        assertEquals(1L, countTargetRelationship(updatedKey, "TARGETS", "ExecutionEnvironment", "dr"));
+        assertEquals(1L, countTargetRelationship(updatedKey, "TARGETS", "HardwareNode", "app-2"));
+        assertEquals(1L, countTargetRelationship(updatedKey, "TARGET_ENVIRONMENT", "ExecutionEnvironment", "dr"));
+        assertEquals(1L, countTargetRelationship(updatedKey, "TARGET_NODE", "HardwareNode", "app-2"));
+    }
+
+    @Test
+    void deploymentUpdateAllowsSameEnvironmentAndNodeForDifferentComponents() {
+        String yaml = """
+                subnets:
+                  - cidr: 10.1.0.0/24
+                    vlan: 101
+                    routingZone: core
+                    nodes:
+                      - hostname: app-a
+                        ipAddress: 10.1.0.11
+                        type: VIRTUAL_MACHINE
+                        roles: [app]
+                      - hostname: app-b
+                        ipAddress: 10.1.0.12
+                        type: VIRTUAL_MACHINE
+                        roles: [app]
+                environments:
+                  - name: prod
+                    type: PRODUCTION
+                systems:
+                  - name: Billing
+                    components:
+                      - name: billing-api
+                        version: 1.0.0
+                        deployments:
+                          - environment: prod
+                            hostname: app-a
+                      - name: billing-worker
+                        version: 1.0.0
+                        deployments:
+                          - environment: prod
+                            hostname: app-b
+                links: []
+                """;
+
+        RestTemplate ingestClient = authenticatedClient("ingest", "ingest-password");
+        ResponseEntity<String> ingestResponse = ingestClient.postForEntity(
+                "http://localhost:" + port + "/api/manifests/ingest",
+                yaml,
+                String.class);
+        assertEquals(HttpStatus.OK, ingestResponse.getStatusCode());
+
+        ResponseEntity<String> updateResponse = ingestClient.exchange(
+                deploymentUpdateUri("prod@app-a:billing-api:1.0.0"),
+                HttpMethod.PUT,
+                new HttpEntity<>(Map.of("targetEnvironmentName", "prod", "targetHostname", "app-b")),
+                String.class);
+        assertEquals(HttpStatus.OK, updateResponse.getStatusCode());
+
+        assertEquals(1L, countDeploymentsByKey("prod@app-b:billing-api:1.0.0"));
+        assertEquals(1L, countDeploymentsByKey("prod@app-b:billing-worker:1.0.0"));
+    }
+
     @Test
     void actuatorMetricsExposeCustomCounters() {
         RestTemplate ingestClient = authenticatedClient("ingest", "ingest-password");
@@ -276,6 +396,37 @@ class ApiIntegrationTest {
         RestTemplate client = new RestTemplate();
         client.getInterceptors().add(new BasicAuthenticationInterceptor(username, password));
         return client;
+    }
+
+
+    private URI deploymentUpdateUri(String deploymentKey) {
+        return UriComponentsBuilder.fromUriString("http://localhost:" + port)
+                .pathSegment("api", "topology", "deployments", deploymentKey)
+                .build()
+                .encode()
+                .toUri();
+    }
+
+    private long countDeploymentsByKey(String deploymentKey) {
+        return neo4jClient.query("MATCH (d:DeploymentInstance {deploymentKey: $deploymentKey}) RETURN count(d) AS count")
+                .bind(deploymentKey).to("deploymentKey")
+                .fetchAs(Long.class)
+                .mappedBy((typeSystem, record) -> record.get("count").asLong())
+                .one()
+                .orElse(0L);
+    }
+
+    private long countTargetRelationship(String deploymentKey, String relationshipType, String label, String value) {
+        String keyField = "HardwareNode".equals(label) ? "hostname" : "name";
+        return neo4jClient.query("MATCH (d:DeploymentInstance {deploymentKey: $deploymentKey})-[r]->(t:" + label + ") " +
+                        "WHERE type(r) = $relationshipType AND t." + keyField + " = $value RETURN count(r) AS count")
+                .bind(deploymentKey).to("deploymentKey")
+                .bind(relationshipType).to("relationshipType")
+                .bind(value).to("value")
+                .fetchAs(Long.class)
+                .mappedBy((typeSystem, record) -> record.get("count").asLong())
+                .one()
+                .orElse(0L);
     }
 
     private long countNodes(String label) {

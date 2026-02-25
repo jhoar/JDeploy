@@ -6,6 +6,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Objects;
+
 @Service
 public class TopologyMutationService {
 
@@ -96,7 +98,13 @@ public class TopologyMutationService {
         ensureExists("MATCH (d:DeploymentInstance {deploymentKey: $name}) RETURN count(d) > 0 AS found", "name", currentDeploymentKey, "DeploymentInstance not found");
         ensureExists("MATCH (e:ExecutionEnvironment {name: $name}) RETURN count(e) > 0 AS found", "name", request.targetEnvironmentName(), "Target environment not found");
         ensureExists("MATCH (n:HardwareNode {hostname: $name}) RETURN count(n) > 0 AS found", "name", request.targetHostname(), "Target node not found");
-        String newKey = request.targetEnvironmentName() + "@" + request.targetHostname();
+
+        DeploymentKeyParts keyParts = loadDeploymentKeyParts(currentDeploymentKey);
+        String newKey = canonicalDeploymentKey(
+                request.targetEnvironmentName(),
+                request.targetHostname(),
+                keyParts.componentName(),
+                keyParts.componentVersion());
         ensureUnique("MATCH (d:DeploymentInstance {deploymentKey: $name}) WHERE $name <> $current RETURN count(d) = 0 AS unique", newKey, currentDeploymentKey, "Deployment key already exists");
 
         neo4jClient.query("""
@@ -105,9 +113,18 @@ public class TopologyMutationService {
                 MATCH (n:HardwareNode {hostname: $hostname})
                 OPTIONAL MATCH (d)-[oldEnv:TARGET_ENVIRONMENT]->(:ExecutionEnvironment)
                 OPTIONAL MATCH (d)-[oldNode:TARGET_NODE]->(:HardwareNode)
-                DELETE oldEnv, oldNode
-                CREATE (d)-[:TARGET_ENVIRONMENT]->(e)
-                CREATE (d)-[:TARGET_NODE]->(n)
+                OPTIONAL MATCH (d)-[oldTargetsEnv:TARGETS]->(:ExecutionEnvironment)
+                OPTIONAL MATCH (d)-[oldTargetsNode:TARGETS]->(:HardwareNode)
+                WITH d, e, n,
+                     collect(DISTINCT oldEnv)
+                     + collect(DISTINCT oldNode)
+                     + collect(DISTINCT oldTargetsEnv)
+                     + collect(DISTINCT oldTargetsNode) AS relsToDelete
+                FOREACH (rel IN relsToDelete | DELETE rel)
+                MERGE (d)-[:TARGET_ENVIRONMENT]->(e)
+                MERGE (d)-[:TARGET_NODE]->(n)
+                MERGE (d)-[:TARGETS]->(e)
+                MERGE (d)-[:TARGETS]->(n)
                 SET d.deploymentKey = $newKey
                 """)
                 .bind(currentDeploymentKey).to("current")
@@ -115,6 +132,62 @@ public class TopologyMutationService {
                 .bind(request.targetHostname()).to("hostname")
                 .bind(newKey).to("newKey")
                 .run();
+    }
+
+    private DeploymentKeyParts loadDeploymentKeyParts(String currentDeploymentKey) {
+        DeploymentKeyParts fromComponentRelationship = neo4jClient.query("""
+                MATCH (c:SoftwareComponent)-[:HAS_DEPLOYMENT]->(d:DeploymentInstance {deploymentKey: $deploymentKey})
+                RETURN c.name AS componentName, c.version AS componentVersion
+                LIMIT 1
+                """)
+                .bind(currentDeploymentKey).to("deploymentKey")
+                .fetchAs(DeploymentKeyParts.class)
+                .mappedBy((typeSystem, record) -> {
+                    String componentName = record.get("componentName").isNull() ? null : record.get("componentName").asString();
+                    String componentVersion = record.get("componentVersion").isNull() ? null : record.get("componentVersion").asString();
+                    if (componentName == null || componentVersion == null) {
+                        return null;
+                    }
+                    return new DeploymentKeyParts(componentName, componentVersion);
+                })
+                .one()
+                .orElse(null);
+        if (fromComponentRelationship != null) {
+            return fromComponentRelationship;
+        }
+
+        return parseDeploymentKey(currentDeploymentKey);
+    }
+
+    private DeploymentKeyParts parseDeploymentKey(String deploymentKey) {
+        String[] envAndRest = deploymentKey.split("@", 2);
+        if (envAndRest.length != 2 || envAndRest[0].isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Deployment key format is invalid");
+        }
+
+        String[] hostAndComponent = envAndRest[1].split(":", 3);
+        if (hostAndComponent.length != 3
+                || hostAndComponent[0].isBlank()
+                || hostAndComponent[1].isBlank()
+                || hostAndComponent[2].isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Deployment key format is invalid");
+        }
+
+        return new DeploymentKeyParts(hostAndComponent[1], hostAndComponent[2]);
+    }
+
+    private String canonicalDeploymentKey(String environmentName, String hostname, String componentName, String componentVersion) {
+        if (isBlank(environmentName) || isBlank(hostname) || isBlank(componentName) || isBlank(componentVersion)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Deployment key format is invalid");
+        }
+        return environmentName + "@" + hostname + ":" + componentName + ":" + componentVersion;
+    }
+
+    private boolean isBlank(String value) {
+        return Objects.isNull(value) || value.isBlank();
+    }
+
+    private record DeploymentKeyParts(String componentName, String componentVersion) {
     }
 
     private void ensureExists(String query, String key, String value, String message) {
