@@ -15,6 +15,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -33,7 +34,7 @@ public class TopologyQueryController {
         this.topologyQueryService = topologyQueryService;
     }
 
-    @GetMapping("/deployments/subnet/{subnetId}")
+    @GetMapping("/deployments/subnet/{subnetId:.+}")
     @PreAuthorize("hasAuthority('" + ApiRoles.READ_ONLY + "')")
     @Operation(summary = "List deployments in a subnet")
     @ApiResponses({
@@ -48,7 +49,7 @@ public class TopologyQueryController {
                 .toList();
     }
 
-    @GetMapping("/subnets/{subnetId}/deployments")
+    @GetMapping("/subnets/{subnetId:.+}/deployments")
     @PreAuthorize("hasAuthority('" + ApiRoles.READ_ONLY + "')")
     @Operation(summary = "Show deployments in subnet")
     @ApiResponses({
@@ -57,6 +58,19 @@ public class TopologyQueryController {
             @ApiResponse(responseCode = "403", description = "Insufficient privileges")
     })
     public List<DeploymentView> deploymentsInSubnet(@PathVariable String subnetId) {
+        return deploymentsBySubnet(subnetId);
+    }
+
+
+    @GetMapping("/subnets/deployments")
+    @PreAuthorize("hasAuthority('" + ApiRoles.READ_ONLY + "')")
+    @Operation(summary = "Show deployments in subnet (query parameter)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Deployments found", content = @Content(array = @ArraySchema(schema = @Schema(implementation = DeploymentView.class)))),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Insufficient privileges")
+    })
+    public List<DeploymentView> deploymentsInSubnetQuery(@RequestParam String subnetId) {
         return deploymentsBySubnet(subnetId);
     }
 
@@ -79,7 +93,7 @@ public class TopologyQueryController {
     @PreAuthorize("hasAuthority('" + ApiRoles.READ_ONLY + "')")
     @Operation(summary = "List all nodes in a cluster")
     public List<ClusterNodeView> nodesInCluster(@PathVariable String clusterName) {
-        return neo4jClient.query("""
+        return List.copyOf(neo4jClient.query("""
                 MATCH (c)-[:HAS_NODE]->(n:HardwareNode)
                 WHERE c.name = $clusterName
                   AND ('GridCluster' IN labels(c) OR 'KubernetesCluster' IN labels(c))
@@ -93,14 +107,14 @@ public class TopologyQueryController {
                         record.get("clusterName").asString(),
                         record.get("hostname").asString(),
                         record.get("ipAddress").asString()))
-                .all();
+                .all());
     }
 
-    @GetMapping("/clusters/{clusterName}/subnets/{subnetId}/nodes")
+    @GetMapping("/clusters/{clusterName}/subnets/{subnetId:.+}/nodes")
     @PreAuthorize("hasAuthority('" + ApiRoles.READ_ONLY + "')")
     @Operation(summary = "List cluster nodes scoped to a subnet")
     public List<ClusterNodeView> nodesInClusterAndSubnet(@PathVariable String clusterName, @PathVariable String subnetId) {
-        return neo4jClient.query("""
+        return List.copyOf(neo4jClient.query("""
                 MATCH (c)-[:HAS_NODE]->(n:HardwareNode)
                 MATCH (:Subnet {cidr: $subnetId})-[:CONTAINS_NODE]->(n)
                 WHERE c.name = $clusterName
@@ -115,7 +129,7 @@ public class TopologyQueryController {
                         record.get("clusterName").asString(),
                         record.get("hostname").asString(),
                         record.get("ipAddress").asString()))
-                .all();
+                .all());
     }
 
     @GetMapping("/diagrams/system/{systemId}")
@@ -164,8 +178,16 @@ public class TopologyQueryController {
                 .stream()
                 .map(row -> new SystemImpactView(
                         String.valueOf(row.get("systemName")),
-                        (List<String>) row.getOrDefault("impactedComponents", List.of())))
+                        toStringList(row.get("impactedComponents"))))
                 .toList();
+    }
+
+
+    private static List<String> toStringList(Object value) {
+        if (value instanceof java.util.Collection<?> collection) {
+            return collection.stream().map(String::valueOf).toList();
+        }
+        return List.of();
     }
 
     @Schema(name = "DeploymentView")

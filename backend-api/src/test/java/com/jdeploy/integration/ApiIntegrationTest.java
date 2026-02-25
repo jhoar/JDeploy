@@ -1,11 +1,11 @@
 package com.jdeploy.integration;
 
+import com.jdeploy.JDeployApplication;
 import com.jdeploy.api.ManifestController;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.data.neo4j.core.Neo4jClient;
@@ -13,13 +13,18 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.support.BasicAuthenticationInterceptor;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.Neo4jContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -27,10 +32,11 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Testcontainers
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = JDeployApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class ApiIntegrationTest {
 
     @Container
@@ -44,8 +50,7 @@ class ApiIntegrationTest {
         registry.add("spring.neo4j.authentication.password", () -> "changeit");
     }
 
-    @Autowired
-    private TestRestTemplate restTemplate;
+    private final RestTemplate restTemplate = new RestTemplate();
 
     @Autowired
     private Neo4jClient neo4jClient;
@@ -61,7 +66,7 @@ class ApiIntegrationTest {
     @Test
     void ingestionPersistsHeterogeneousTopologyAndServesReadEndpoints() {
         String yaml = manifest("heterogeneous-topology.yaml");
-        TestRestTemplate ingestClient = restTemplate.withBasicAuth("ingest", "ingest-password");
+        RestTemplate ingestClient = authenticatedClient("ingest", "ingest-password");
 
         ResponseEntity<ManifestController.OperationResult> ingestResponse = ingestClient.postForEntity(
                 "http://localhost:" + port + "/api/manifests/ingest",
@@ -73,9 +78,13 @@ class ApiIntegrationTest {
         assertEquals(2L, countNodes("ExecutionEnvironment"));
         assertEquals(2L, countNodes("NetworkLink"));
 
-        TestRestTemplate readClient = restTemplate.withBasicAuth("reader", "reader-password");
+        RestTemplate readClient = authenticatedClient("reader", "reader-password");
+        URI deploymentsUri = UriComponentsBuilder.fromUriString("http://localhost:" + port + "/api/subnets/deployments")
+                .queryParam("subnetId", "10.10.0.0/24")
+                .build(true)
+                .toUri();
         ResponseEntity<List<Map<String, Object>>> deploymentsResponse = readClient.exchange(
-                "http://localhost:" + port + "/api/deployments/subnet/10.10.0.0/24",
+                deploymentsUri,
                 HttpMethod.GET,
                 HttpEntity.EMPTY,
                 new ParameterizedTypeReference<>() {
@@ -85,7 +94,7 @@ class ApiIntegrationTest {
         assertFalse(deploymentsResponse.getBody().isEmpty());
 
         ResponseEntity<Map<String, Object>> systemDiagramResponse = readClient.exchange(
-                "http://localhost:" + port + "/api/systems/Billing/diagram",
+                "http://localhost:" + port + "/api/diagrams/system/Billing",
                 HttpMethod.GET,
                 HttpEntity.EMPTY,
                 new ParameterizedTypeReference<>() {
@@ -106,19 +115,20 @@ class ApiIntegrationTest {
     @Test
     void endpointsAndAuthorizationRulesAreEnforced() {
         String yaml = manifest("edge-regional-topology.yaml");
-        TestRestTemplate readClient = restTemplate.withBasicAuth("reader", "reader-password");
-        TestRestTemplate ingestClient = restTemplate.withBasicAuth("ingest", "ingest-password");
-        TestRestTemplate generatorClient = restTemplate.withBasicAuth("generator", "generator-password");
+        RestTemplate readClient = authenticatedClient("reader", "reader-password");
+        RestTemplate ingestClient = authenticatedClient("ingest", "ingest-password");
+        RestTemplate generatorClient = authenticatedClient("generator", "generator-password");
 
-        ResponseEntity<String> unauthorizedRead = restTemplate.getForEntity(
-                "http://localhost:" + port + "/api/subnets/172.16.10.0/24/deployments",
-                String.class);
+        URI unauthorizedUri = UriComponentsBuilder.fromUriString("http://localhost:" + port + "/api/subnets/deployments")
+                .queryParam("subnetId", "172.16.10.0/24")
+                .build(true)
+                .toUri();
+        HttpClientErrorException.Unauthorized unauthorizedRead = assertThrows(HttpClientErrorException.Unauthorized.class,
+                () -> restTemplate.getForEntity(unauthorizedUri, String.class));
         assertEquals(HttpStatus.UNAUTHORIZED, unauthorizedRead.getStatusCode());
 
-        ResponseEntity<String> forbiddenIngest = readClient.postForEntity(
-                "http://localhost:" + port + "/api/manifests/ingest",
-                yaml,
-                String.class);
+        HttpClientErrorException.Forbidden forbiddenIngest = assertThrows(HttpClientErrorException.Forbidden.class,
+                () -> readClient.postForEntity("http://localhost:" + port + "/api/manifests/ingest", yaml, String.class));
         assertEquals(HttpStatus.FORBIDDEN, forbiddenIngest.getStatusCode());
 
         ResponseEntity<ManifestController.OperationResult> ingestResponse = ingestClient.postForEntity(
@@ -127,10 +137,8 @@ class ApiIntegrationTest {
                 ManifestController.OperationResult.class);
         assertEquals(HttpStatus.OK, ingestResponse.getStatusCode());
 
-        ResponseEntity<String> forbiddenIngestForGenerator = generatorClient.postForEntity(
-                "http://localhost:" + port + "/api/manifests/ingest",
-                yaml,
-                String.class);
+        HttpClientErrorException.Forbidden forbiddenIngestForGenerator = assertThrows(HttpClientErrorException.Forbidden.class,
+                () -> generatorClient.postForEntity("http://localhost:" + port + "/api/manifests/ingest", yaml, String.class));
         assertEquals(HttpStatus.FORBIDDEN, forbiddenIngestForGenerator.getStatusCode());
 
         ResponseEntity<Map<String, Object>> generated = generatorClient.exchange(
@@ -141,10 +149,8 @@ class ApiIntegrationTest {
                 });
         assertEquals(HttpStatus.OK, generated.getStatusCode());
 
-        ResponseEntity<String> forbiddenGenerateForReader = readClient.postForEntity(
-                "http://localhost:" + port + "/api/artifacts/generate",
-                yaml,
-                String.class);
+        HttpClientErrorException.Forbidden forbiddenGenerateForReader = assertThrows(HttpClientErrorException.Forbidden.class,
+                () -> readClient.postForEntity("http://localhost:" + port + "/api/artifacts/generate", yaml, String.class));
         assertEquals(HttpStatus.FORBIDDEN, forbiddenGenerateForReader.getStatusCode());
     }
 
@@ -152,7 +158,7 @@ class ApiIntegrationTest {
     void artifactGenerationAndDownloadEnforceAuthorities() {
         String yaml = manifest("heterogeneous-topology.yaml");
 
-        TestRestTemplate generatorClient = restTemplate.withBasicAuth("generator", "generator-password");
+        RestTemplate generatorClient = authenticatedClient("generator", "generator-password");
         ResponseEntity<Map<String, Object>> generated = generatorClient.exchange(
                 "http://localhost:" + port + "/api/artifacts/generate",
                 HttpMethod.POST,
@@ -163,7 +169,7 @@ class ApiIntegrationTest {
         String artifactId = String.valueOf(generated.getBody().get("artifactId"));
         assertNotNull(artifactId);
 
-        TestRestTemplate readClient = restTemplate.withBasicAuth("reader", "reader-password");
+        RestTemplate readClient = authenticatedClient("reader", "reader-password");
         ResponseEntity<String> downloaded = readClient.getForEntity(
                 "http://localhost:" + port + "/api/artifacts/" + artifactId,
                 String.class);
@@ -185,7 +191,7 @@ class ApiIntegrationTest {
                 CREATE (c)-[:HAS_DEPLOYMENT]->(d)
                 """).run();
 
-        TestRestTemplate readClient = restTemplate.withBasicAuth("reader", "reader-password");
+        RestTemplate readClient = authenticatedClient("reader", "reader-password");
         ResponseEntity<Map<String, Object>> qualityResponse = readClient.exchange(
                 "http://localhost:" + port + "/api/quality-gates/graph",
                 HttpMethod.GET,
@@ -206,15 +212,22 @@ class ApiIntegrationTest {
 
     @Test
     void actuatorMetricsExposeCustomCounters() {
-        TestRestTemplate ingestClient = restTemplate.withBasicAuth("ingest", "ingest-password");
+        RestTemplate ingestClient = authenticatedClient("ingest", "ingest-password");
         ingestClient.postForEntity("http://localhost:" + port + "/api/manifests/ingest", manifest("heterogeneous-topology.yaml"), String.class);
-        ingestClient.postForEntity("http://localhost:" + port + "/api/quality-gates/manifest", "bad: [", String.class);
+        assertThrows(HttpClientErrorException.BadRequest.class,
+                () -> ingestClient.postForEntity("http://localhost:" + port + "/api/quality-gates/manifest", "bad: [", String.class));
 
-        TestRestTemplate readClient = restTemplate.withBasicAuth("reader", "reader-password");
+        RestTemplate readClient = authenticatedClient("reader", "reader-password");
         ResponseEntity<String> prometheus = readClient.getForEntity("http://localhost:" + port + "/actuator/prometheus", String.class);
 
         assertEquals(HttpStatus.OK, prometheus.getStatusCode());
         assertTrue(prometheus.getBody().contains("jdeploy_ingestion_errors_total"));
+    }
+
+    private RestTemplate authenticatedClient(String username, String password) {
+        RestTemplate client = new RestTemplate();
+        client.getInterceptors().add(new BasicAuthenticationInterceptor(username, password));
+        return client;
     }
 
     private long countNodes(String label) {

@@ -18,6 +18,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 class DiagramGenerationServiceTest {
 
@@ -32,7 +33,8 @@ class DiagramGenerationServiceTest {
         DiagramGenerationService service = new DiagramGenerationService(
                 new NoopStorage(),
                 ObservationRegistry.NOOP,
-                new OperationMetricsService(meterRegistry));
+                new OperationMetricsService(meterRegistry),
+                mock(TopologyQueryService.class));
 
         String uml = service.buildPlantUml(manifest);
 
@@ -58,7 +60,8 @@ class DiagramGenerationServiceTest {
         DiagramGenerationService service = new DiagramGenerationService(
                 artifactStorage,
                 ObservationRegistry.NOOP,
-                new OperationMetricsService(meterRegistry));
+                new OperationMetricsService(meterRegistry),
+                mock(TopologyQueryService.class));
 
         ArtifactMetadata metadata = service.generateDeploymentDiagram(manifest);
 
@@ -76,7 +79,8 @@ class DiagramGenerationServiceTest {
         DiagramGenerationService service = new DiagramGenerationService(
                 new NoopStorage(),
                 ObservationRegistry.NOOP,
-                new OperationMetricsService(meterRegistry));
+                new OperationMetricsService(meterRegistry),
+                mock(TopologyQueryService.class));
 
         assertThrows(PreconditionViolationException.class, () -> service.generateDeploymentDiagram(null));
     }

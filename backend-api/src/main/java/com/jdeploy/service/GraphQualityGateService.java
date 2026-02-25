@@ -28,18 +28,24 @@ public class GraphQualityGateService {
     }
 
     public QualityGateReport evaluateGraph() {
-        List<String> orphanDeployments = neo4jClient.query("""
+        List<String> orphanDeployments = List.copyOf(neo4jClient.query("""
                 MATCH (d:DeploymentInstance)
-                WHERE NOT (d)-[:TARGETS]->(:HardwareNode)
-                   OR NOT (d)-[:TARGETS]->(:ExecutionEnvironment)
+                WHERE NOT EXISTS {
+                    MATCH (d)-[rel]->(:HardwareNode)
+                    WHERE type(rel) = 'TARGETS'
+                }
+                   OR NOT EXISTS {
+                    MATCH (d)-[rel]->(:ExecutionEnvironment)
+                    WHERE type(rel) = 'TARGETS'
+                }
                 RETURN d.deploymentKey AS value
                 ORDER BY value
                 """)
                 .fetchAs(String.class)
                 .mappedBy((typeSystem, record) -> record.get("value").asString())
-                .all();
+                .all());
 
-        List<String> nodesWithoutSubnet = neo4jClient.query("""
+        List<String> nodesWithoutSubnet = List.copyOf(neo4jClient.query("""
                 MATCH (n:HardwareNode)
                 WHERE NOT (:Subnet)-[:CONTAINS_NODE]->(n)
                 RETURN n.hostname AS value
@@ -47,9 +53,9 @@ public class GraphQualityGateService {
                 """)
                 .fetchAs(String.class)
                 .mappedBy((typeSystem, record) -> record.get("value").asString())
-                .all();
+                .all());
 
-        List<String> duplicateHostnames = neo4jClient.query("""
+        List<String> duplicateHostnames = List.copyOf(neo4jClient.query("""
                 MATCH (n:HardwareNode)
                 WITH n.hostname AS hostname, count(*) AS c
                 WHERE c > 1
@@ -58,9 +64,9 @@ public class GraphQualityGateService {
                 """)
                 .fetchAs(String.class)
                 .mappedBy((typeSystem, record) -> record.get("value").asString())
-                .all();
+                .all());
 
-        List<String> duplicateIps = neo4jClient.query("""
+        List<String> duplicateIps = List.copyOf(neo4jClient.query("""
                 MATCH (n:HardwareNode)
                 WHERE n.ipAddress IS NOT NULL
                 WITH n.ipAddress AS ipAddress, count(*) AS c
@@ -70,9 +76,9 @@ public class GraphQualityGateService {
                 """)
                 .fetchAs(String.class)
                 .mappedBy((typeSystem, record) -> record.get("value").asString())
-                .all();
+                .all());
 
-        List<String> softwareLinkedToMissingEnvironment = neo4jClient.query("""
+        List<String> softwareLinkedToMissingEnvironment = List.copyOf(neo4jClient.query("""
                 MATCH (c:SoftwareComponent)-[:HAS_DEPLOYMENT]->(d:DeploymentInstance)
                 WHERE NOT (d)-[:TARGETS]->(:ExecutionEnvironment)
                 RETURN c.name + ':' + c.version + ' -> ' + coalesce(d.deploymentKey, 'unknown') AS value
@@ -80,7 +86,7 @@ public class GraphQualityGateService {
                 """)
                 .fetchAs(String.class)
                 .mappedBy((typeSystem, record) -> record.get("value").asString())
-                .all();
+                .all());
 
         return new QualityGateReport(Map.of(
                 "orphanDeployments", orphanDeployments,
