@@ -400,7 +400,7 @@ class ApiIntegrationTest {
 
 
     private URI deploymentUpdateUri(String deploymentKey) {
-        return UriComponentsBuilder.fromHttpUrl("http://localhost:" + port)
+        return UriComponentsBuilder.fromUriString("http://localhost:" + port)
                 .pathSegment("api", "topology", "deployments", deploymentKey)
                 .build()
                 .encode()
