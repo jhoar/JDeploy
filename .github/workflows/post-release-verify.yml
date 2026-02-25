@@ -1,0 +1,427 @@
+name: Post Release Verify
+
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to verify (e.g. v1.2.3). Leave empty to use latest release."
+        required: false
+        type: string
+      verify_sbom:
+        description: "Require SBOM files to be present in release assets"
+        required: false
+        default: false
+        type: boolean
+      verify_attestations:
+        description: "Verify image attestations/signatures with GitHub attestations"
+        required: false
+        default: false
+        type: boolean
+      create_rollback_issue:
+        description: "Automatically open a prefilled rollback issue if verification fails"
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.id || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+  attestations: read
+  issues: write
+
+jobs:
+  verify-release:
+    name: Verify published release artifacts and image
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    steps:
+      - name: Resolve release context
+        id: context
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          WORKFLOW_RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
+            release_tag="$WORKFLOW_RUN_HEAD_BRANCH"
+          else
+            release_tag="$INPUT_RELEASE_TAG"
+          fi
+
+          if [[ -n "$release_tag" ]]; then
+            gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" --json tagName >/dev/null
+          else
+            release_tag=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 --json tagName --jq '.[0].tagName')
+          fi
+
+          if [[ -z "$release_tag" || "$release_tag" == "null" ]]; then
+            echo "Unable to resolve release tag for verification." >&2
+            exit 1
+          fi
+
+          release_info=$(gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" --json id,tagName,isPrerelease,isDraft,publishedAt)
+          release_id=$(jq -r '.id' <<<"$release_info")
+          release_published_at=$(jq -r '.publishedAt' <<<"$release_info")
+
+          previous_tag=$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --exclude-pre-releases --limit 20 --json tagName,publishedAt --jq \
+            "map(select(.tagName != \"${release_tag}\" and .publishedAt < \"${release_published_at}\")) | sort_by(.publishedAt) | reverse | .[0].tagName // \"\"")
+
+          echo "release_tag=${release_tag}" >> "$GITHUB_OUTPUT"
+          echo "release_id=${release_id}" >> "$GITHUB_OUTPUT"
+          echo "previous_tag=${previous_tag}" >> "$GITHUB_OUTPUT"
+          echo "workflow_head_sha=${WORKFLOW_RUN_HEAD_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Download published release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          gh release download "${{ steps.context.outputs.release_tag }}" --repo "$GITHUB_REPOSITORY" --dir release-assets --clobber
+          echo "Downloaded assets:" 
+          ls -lah release-assets
+
+      - name: Set verification toggles
+        id: toggles
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERIFY_SBOM: ${{ inputs.verify_sbom }}
+          INPUT_VERIFY_ATTESTATIONS: ${{ inputs.verify_attestations }}
+          INPUT_CREATE_ROLLBACK_ISSUE: ${{ inputs.create_rollback_issue }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          verify_sbom=false
+          verify_attestations=false
+          create_rollback_issue=false
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            [[ "$INPUT_VERIFY_SBOM" == "true" ]] && verify_sbom=true
+            [[ "$INPUT_VERIFY_ATTESTATIONS" == "true" ]] && verify_attestations=true
+            [[ "$INPUT_CREATE_ROLLBACK_ISSUE" == "true" ]] && create_rollback_issue=true
+          fi
+
+          echo "verify_sbom=${verify_sbom}" >> "$GITHUB_OUTPUT"
+          echo "verify_attestations=${verify_attestations}" >> "$GITHUB_OUTPUT"
+          echo "create_rollback_issue=${create_rollback_issue}" >> "$GITHUB_OUTPUT"
+
+      - name: Run post-release verification
+        id: verify
+        env:
+          VERIFY_SBOM: ${{ steps.toggles.outputs.verify_sbom }}
+          VERIFY_ATTESTATIONS: ${{ steps.toggles.outputs.verify_attestations }}
+          RELEASE_TAG: ${{ steps.context.outputs.release_tag }}
+          PREVIOUS_TAG: ${{ steps.context.outputs.previous_tag }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p verification
+
+          startup_status="pass"
+          health_status="pass"
+          auth_status="pass"
+          checksum_status="pass"
+          sbom_status="skipped"
+          attest_status="skipped"
+          rollback_status="available"
+
+          startup_detail="Application container started and health reached UP."
+          health_detail="/actuator/health returned UP."
+          auth_detail="Unauthorized request rejected and authorized request succeeded."
+          checksum_detail="Published checksums matched release binaries."
+          sbom_detail="SBOM verification disabled."
+          attest_detail="Attestation verification disabled."
+
+          checksum_file=$(find release-assets -maxdepth 1 -name 'SHA256SUMS.txt' -print -quit)
+          if [[ -z "$checksum_file" ]]; then
+            checksum_status="fail"
+            checksum_detail="SHA256SUMS.txt missing from release assets."
+          else
+            if ! (cd release-assets && sha256sum -c "$(basename "$checksum_file")"); then
+              checksum_status="fail"
+              checksum_detail="Checksum mismatch detected in release assets."
+            fi
+          fi
+
+          sbom_files_found=0
+          while IFS= read -r -d '' _; do
+            sbom_files_found=$((sbom_files_found + 1))
+          done < <(find release-assets -maxdepth 2 -type f \( -name '*sbom*.json' -o -name '*sbom*.xml' -o -name '*.spdx.json' -o -name '*.cdx.json' \) -print0)
+
+          if [[ "$VERIFY_SBOM" == "true" ]]; then
+            if [[ "$sbom_files_found" -gt 0 ]]; then
+              sbom_status="pass"
+              sbom_detail="SBOM files present (${sbom_files_found})."
+            else
+              sbom_status="fail"
+              sbom_detail="SBOM verification enabled but no SBOM file was found."
+            fi
+          fi
+
+          tags_file=$(find release-assets -maxdepth 1 -name 'release-container-tags.txt' -print -quit)
+          image_ref=""
+          if [[ -n "$tags_file" ]]; then
+            image_ref=$(grep -E '^ghcr\.io/.+:.+' "$tags_file" | grep -v ':latest$' | head -n1 || true)
+            if [[ -z "$image_ref" ]]; then
+              image_ref=$(grep -E '^ghcr\.io/.+:.+' "$tags_file" | head -n1 || true)
+            fi
+          fi
+
+          if [[ -z "$image_ref" ]]; then
+            startup_status="fail"
+            health_status="fail"
+            auth_status="fail"
+            startup_detail="No published image reference found in release-container-tags.txt."
+            health_detail="Health check skipped due to missing image reference."
+            auth_detail="API auth/access check skipped due to missing image reference."
+          else
+            docker network create post-release-verify || true
+
+            docker run -d --name verify-neo4j --network post-release-verify \
+              -e NEO4J_AUTH=neo4j/changeit \
+              neo4j:5.26 >/dev/null
+
+            for attempt in {1..24}; do
+              if docker exec verify-neo4j cypher-shell -a bolt://localhost:7687 -u neo4j -p changeit 'RETURN 1' >/dev/null 2>&1; then
+                break
+              fi
+              if [[ "$attempt" -eq 24 ]]; then
+                startup_status="fail"
+                health_status="fail"
+                auth_status="fail"
+                startup_detail="Neo4j dependency did not become ready."
+                health_detail="Health check skipped because Neo4j dependency failed startup."
+                auth_detail="API auth/access check skipped because Neo4j dependency failed startup."
+              fi
+              sleep 5
+            done
+
+            if [[ "$startup_status" == "pass" ]]; then
+              docker pull "$image_ref"
+
+              smoke_reader_user="smoke-reader"
+              smoke_generator_user="smoke-generator"
+              smoke_ingest_user="smoke-ingest"
+              smoke_reader_password=$(openssl rand -hex 16)
+              smoke_generator_password=$(openssl rand -hex 16)
+              smoke_ingest_password=$(openssl rand -hex 16)
+
+              docker run -d --name verify-app --network post-release-verify -p 18080:8080 \
+                -e SPRING_NEO4J_URI=bolt://verify-neo4j:7687 \
+                -e SPRING_NEO4J_AUTHENTICATION_USERNAME=neo4j \
+                -e SPRING_NEO4J_AUTHENTICATION_PASSWORD=changeit \
+                -e JDEPLOY_SECURITY_USERS_READER_USERNAME=${smoke_reader_user} \
+                -e JDEPLOY_SECURITY_USERS_READER_PASSWORD=${smoke_reader_password} \
+                -e JDEPLOY_SECURITY_USERS_GENERATOR_USERNAME=${smoke_generator_user} \
+                -e JDEPLOY_SECURITY_USERS_GENERATOR_PASSWORD=${smoke_generator_password} \
+                -e JDEPLOY_SECURITY_USERS_INGEST_USERNAME=${smoke_ingest_user} \
+                -e JDEPLOY_SECURITY_USERS_INGEST_PASSWORD=${smoke_ingest_password} \
+                "$image_ref" >/dev/null
+
+              app_ready=false
+              for attempt in {1..30}; do
+                if curl --silent --show-error --fail http://localhost:18080/actuator/health > verification/health.json 2>/dev/null; then
+                  app_ready=true
+                  break
+                fi
+                sleep 4
+              done
+
+              if [[ "$app_ready" != "true" ]]; then
+                startup_status="fail"
+                startup_detail="Application did not become healthy in allotted startup window."
+                health_status="fail"
+                health_detail="Could not read /actuator/health because application startup failed."
+                auth_status="fail"
+                auth_detail="API auth/access checks skipped because application startup failed."
+              else
+                if ! jq -e '.status == "UP"' verification/health.json >/dev/null; then
+                  health_status="fail"
+                  health_detail="/actuator/health response did not report status=UP."
+                fi
+
+                unauth_code=$(curl --silent --show-error --output /tmp/unauth.out --write-out '%{http_code}' http://localhost:18080/api/topology/systems || true)
+                auth_header=$(printf '%s:%s' "${smoke_reader_user}" "${smoke_reader_password}" | base64 -w 0)
+                auth_code=$(curl --silent --show-error --output verification/topology-systems.json --write-out '%{http_code}' -H "Authorization: Basic ${auth_header}" http://localhost:18080/api/topology/systems || true)
+
+                if [[ "$unauth_code" != "401" ]]; then
+                  auth_status="fail"
+                  auth_detail="Expected 401 for unauthenticated /api/topology/systems request, got ${unauth_code}."
+                fi
+                if [[ "$auth_code" != "200" ]]; then
+                  auth_status="fail"
+                  auth_detail="Expected 200 for authenticated /api/topology/systems request, got ${auth_code}."
+                fi
+              fi
+            fi
+          fi
+
+          if [[ "$VERIFY_ATTESTATIONS" == "true" ]]; then
+            if [[ -n "$image_ref" ]]; then
+              if gh attestation verify "oci://${image_ref}" --repo "$GITHUB_REPOSITORY" >/tmp/attestation.log 2>&1; then
+                attest_status="pass"
+                attest_detail="Attestation verification succeeded for ${image_ref}."
+              else
+                attest_status="fail"
+                attest_detail="Attestation verification failed for ${image_ref}. See attestation logs."
+                cp /tmp/attestation.log verification/attestation.log || true
+              fi
+            else
+              attest_status="fail"
+              attest_detail="Attestation verification enabled but no image reference could be resolved."
+            fi
+          fi
+
+          prior_image_ref=""
+          if [[ -n "$PREVIOUS_TAG" ]]; then
+            prior_image_ref="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/jdeploy-backend-api:${PREVIOUS_TAG}"
+          fi
+
+          overall_status="pass"
+          for value in "$startup_status" "$health_status" "$auth_status" "$checksum_status" "$sbom_status" "$attest_status"; do
+            if [[ "$value" == "fail" ]]; then
+              overall_status="fail"
+            fi
+          done
+
+          jq -n \
+            --arg releaseTag "$RELEASE_TAG" \
+            --arg previousTag "$PREVIOUS_TAG" \
+            --arg imageRef "$image_ref" \
+            --arg previousImageRef "$prior_image_ref" \
+            --arg overallStatus "$overall_status" \
+            --arg startupStatus "$startup_status" \
+            --arg startupDetail "$startup_detail" \
+            --arg healthStatus "$health_status" \
+            --arg healthDetail "$health_detail" \
+            --arg authStatus "$auth_status" \
+            --arg authDetail "$auth_detail" \
+            --arg checksumStatus "$checksum_status" \
+            --arg checksumDetail "$checksum_detail" \
+            --arg sbomStatus "$sbom_status" \
+            --arg sbomDetail "$sbom_detail" \
+            --arg attestStatus "$attest_status" \
+            --arg attestDetail "$attest_detail" \
+            --arg rollbackStatus "$rollback_status" \
+            --arg rollbackCommand "gh workflow run release.yml --ref ${PREVIOUS_TAG}" \
+            '{
+              releaseTag: $releaseTag,
+              previousStableTag: $previousTag,
+              imageReference: $imageRef,
+              previousStableImageReference: $previousImageRef,
+              overallStatus: $overallStatus,
+              checks: {
+                startup: {status: $startupStatus, detail: $startupDetail},
+                healthEndpoint: {status: $healthStatus, detail: $healthDetail},
+                apiAuthAccess: {status: $authStatus, detail: $authDetail},
+                checksumValidation: {status: $checksumStatus, detail: $checksumDetail},
+                sbomValidation: {status: $sbomStatus, detail: $sbomDetail},
+                attestationValidation: {status: $attestStatus, detail: $attestDetail}
+              },
+              rollback: {
+                status: $rollbackStatus,
+                recommendedTag: $previousTag,
+                recommendedImage: $previousImageRef,
+                exampleCommand: $rollbackCommand
+              }
+            }' > verification/verification-summary.json
+
+          {
+            echo "## Post-release verification (${RELEASE_TAG})"
+            echo
+            echo "| Check | Status | Detail |"
+            echo "|---|---|---|"
+            echo "| Application startup | ${startup_status} | ${startup_detail} |"
+            echo "| Health endpoint | ${health_status} | ${health_detail} |"
+            echo "| API auth/access | ${auth_status} | ${auth_detail} |"
+            echo "| Artifact checksums | ${checksum_status} | ${checksum_detail} |"
+            echo "| SBOM validation | ${sbom_status} | ${sbom_detail} |"
+            echo "| Attestation validation | ${attest_status} | ${attest_detail} |"
+            echo
+            echo "### Rollback guidance"
+            echo "- Previous stable tag: ${PREVIOUS_TAG:-none found}"
+            echo "- Current image: ${image_ref:-unavailable}"
+            echo "- Prior stable image: ${prior_image_ref:-unavailable}"
+            echo "- Example rollback command: \`gh workflow run release.yml --ref ${PREVIOUS_TAG:-<stable-tag>}\`"
+          } > verification/run-summary.md
+
+          cat verification/run-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+          echo "overall_status=${overall_status}" >> "$GITHUB_OUTPUT"
+          echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
+          echo "prior_image_ref=${prior_image_ref}" >> "$GITHUB_OUTPUT"
+
+          docker logs verify-app > verification/verify-app.log 2>&1 || true
+          docker logs verify-neo4j > verification/verify-neo4j.log 2>&1 || true
+          docker rm -f verify-app verify-neo4j >/dev/null 2>&1 || true
+          docker network rm post-release-verify >/dev/null 2>&1 || true
+
+          if [[ "$overall_status" == "fail" ]]; then
+            exit 1
+          fi
+
+      - name: Upload verification outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: post-release-verification
+          path: verification/**
+          if-no-files-found: error
+
+      - name: Create rollback issue when requested and verification fails
+        if: failure() && steps.toggles.outputs.create_rollback_issue == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          issue_title="[Rollback] ${GITHUB_REPOSITORY} ${{ steps.context.outputs.release_tag }} verification failed"
+          issue_body=$(cat <<EOF
+          ## Rollback request (auto-generated)
+
+          Post-release verification failed for tag `${{ steps.context.outputs.release_tag }}`.
+
+          ### Suggested rollback target
+          - Prior stable tag: `${{ steps.context.outputs.previous_tag }}`
+          - Prior stable image: `${{ steps.verify.outputs.prior_image_ref }}`
+
+          ### Suggested commands
+          \`\`\`bash
+          docker pull ${{ steps.verify.outputs.prior_image_ref }}
+          docker tag ${{ steps.verify.outputs.prior_image_ref }} ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/jdeploy-backend-api:rollback-candidate
+          gh workflow run release.yml --ref ${{ steps.context.outputs.previous_tag }}
+          \`\`\`
+
+          ### Verification artifact
+          See workflow run artifact: `post-release-verification`.
+
+          ### Owner checklist
+          - [ ] Release owner confirms severity and blast radius.
+          - [ ] Platform owner approves rollback execution window.
+          - [ ] Incident commander posts status update after rollback.
+          EOF
+          )
+
+          gh issue create \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$issue_title" \
+            --label "release" \
+            --label "rollback" \
+            --body "$issue_body"
