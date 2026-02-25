@@ -369,7 +369,7 @@ class ApiIntegrationTest {
 
         ResponseEntity<String> updateResponse = ingestClient.exchange(
                 deploymentUpdateUri("prod@app-a:billing-api:1.0.0"),
-                HttpMethod.PATCH,
+                HttpMethod.PUT,
                 new HttpEntity<>(Map.of("targetEnvironmentName", "prod", "targetHostname", "app-b")),
                 String.class);
         assertEquals(HttpStatus.OK, updateResponse.getStatusCode());
