@@ -1,6 +1,8 @@
 package com.jdeploy.api;
 
 import com.jdeploy.artifact.ArtifactMetadata;
+import com.jdeploy.artifact.ArtifactExpiredException;
+import com.jdeploy.artifact.ArtifactNotFoundException;
 import com.jdeploy.artifact.ArtifactStorage;
 import com.jdeploy.artifact.StoredArtifact;
 import com.jdeploy.security.ApiRoles;
@@ -17,6 +19,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -26,6 +29,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.nio.charset.StandardCharsets;
 
@@ -71,11 +75,20 @@ public class ArtifactController {
     @Operation(summary = "Download generated deployment topology artifact")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Artifact retrieved", content = @Content(mediaType = MediaType.TEXT_PLAIN_VALUE, schema = @Schema(type = "string", format = "binary"))),
+            @ApiResponse(responseCode = "404", description = "Artifact was not found"),
+            @ApiResponse(responseCode = "410", description = "Artifact has expired and is no longer available"),
             @ApiResponse(responseCode = "401", description = "Authentication required"),
             @ApiResponse(responseCode = "403", description = "Insufficient privileges")
     })
     public ResponseEntity<byte[]> download(@PathVariable String artifactId) {
-        StoredArtifact artifact = artifactStorage.read(artifactId);
+        StoredArtifact artifact;
+        try {
+            artifact = artifactStorage.read(artifactId);
+        } catch (ArtifactExpiredException ex) {
+            throw new ResponseStatusException(HttpStatus.GONE, "Artifact has expired", ex);
+        } catch (ArtifactNotFoundException ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Artifact not found", ex);
+        }
         return ResponseEntity.ok()
                 .contentType(MediaType.TEXT_PLAIN)
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + artifact.metadata().artifactId() + "\"")
