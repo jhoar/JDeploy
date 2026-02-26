@@ -48,6 +48,13 @@ class ApiIntegrationTest {
         registry.add("spring.neo4j.uri", neo4j::getBoltUrl);
         registry.add("spring.neo4j.authentication.username", () -> "neo4j");
         registry.add("spring.neo4j.authentication.password", () -> "changeit");
+        registry.add("jdeploy.security.users.ingest.username", () -> "ingest");
+        registry.add("jdeploy.security.users.ingest.password", () -> "ingest-password");
+        registry.add("jdeploy.security.users.generator.username", () -> "generator");
+        registry.add("jdeploy.security.users.generator.password", () -> "generator-password");
+        registry.add("jdeploy.security.users.reader.username", () -> "reader");
+        registry.add("jdeploy.security.users.reader.password", () -> "reader-password");
+        registry.add("jdeploy.security.password-policy.enforce", () -> "false");
     }
 
     private final RestTemplate restTemplate = new RestTemplate();
