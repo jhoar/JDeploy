@@ -37,6 +37,10 @@ springdoc:
 jdeploy:
   artifact:
     uml-output-path: ${JDEPLOY_UML_OUTPUT_PATH:examples/artifacts/uml}
+    cleanup:
+      interval: ${JDEPLOY_ARTIFACT_CLEANUP_INTERVAL:PT15M}
+      initial-delay: ${JDEPLOY_ARTIFACT_CLEANUP_INITIAL_DELAY:PT1M}
+      retention-grace-period: ${JDEPLOY_ARTIFACT_CLEANUP_RETENTION_GRACE_PERIOD:PT0S}
 
   quality-reporting:
     enabled: ${JDEPLOY_QUALITY_REPORTING_ENABLED:true}

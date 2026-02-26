@@ -49,12 +49,17 @@ public class LocalFilesystemArtifactStorage implements ArtifactStorage {
         Objects.requireNonNull(artifactId, "artifactId must not be null");
         Path artifactPath = resolveArtifactPath(artifactId);
         if (!Files.exists(artifactPath)) {
-            throw new IllegalArgumentException("Artifact does not exist: " + artifactId);
+            throw new ArtifactNotFoundException("Artifact does not exist: " + artifactId);
         }
 
         try {
+            Instant retentionUntil = readRetention(artifactPath);
+            if (retentionUntil != null && !retentionUntil.isAfter(Instant.now())) {
+                delete(artifactId);
+                throw new ArtifactExpiredException("Artifact has expired: " + artifactId);
+            }
             String content = Files.readString(artifactPath);
-            return new StoredArtifact(metadataFromPath(artifactPath, readRetention(artifactPath)), content);
+            return new StoredArtifact(metadataFromPath(artifactPath, retentionUntil), content);
         } catch (IOException ex) {
             throw new IllegalStateException("Failed to read artifact " + artifactId, ex);
         }
@@ -106,8 +111,8 @@ public class LocalFilesystemArtifactStorage implements ArtifactStorage {
                     .filter(path -> !path.getFileName().toString().endsWith(RETENTION_SUFFIX))
                     .forEach(path -> {
                         try {
-                            Instant lastModified = Files.getLastModifiedTime(path).toInstant();
-                            if (lastModified.isBefore(cutoff) && Files.deleteIfExists(path)) {
+                            Instant retentionUntil = readRetention(path);
+                            if (retentionUntil != null && !retentionUntil.isAfter(cutoff) && Files.deleteIfExists(path)) {
                                 Files.deleteIfExists(retentionPath(path));
                                 deleted.add(path.getFileName().toString());
                             }
