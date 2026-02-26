@@ -9,11 +9,12 @@ COPY vaadin-ui/pom.xml vaadin-ui/pom.xml
 COPY backend-api/src backend-api/src
 
 RUN mvn -pl backend-api -am -DskipTests package
+RUN find /workspace/backend-api/target -maxdepth 1 -type f -name 'backend-api-*.jar' ! -name '*.original' -exec cp {} /workspace/backend-api/target/app.jar \;
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 
-COPY --from=build /workspace/backend-api/target/backend-api-*.jar /app/app.jar
+COPY --from=build /workspace/backend-api/target/app.jar /app/app.jar
 
 ENV SPRING_PROFILES_ACTIVE=prod
 EXPOSE 8080
