@@ -1,6 +1,6 @@
 package com.jdeploy.security;
 
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
@@ -16,6 +16,7 @@ import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
 @EnableMethodSecurity
+@EnableConfigurationProperties(SecurityCredentialsProperties.class)
 public class SecurityConfig {
 
     @Bean
@@ -35,113 +36,25 @@ public class SecurityConfig {
     }
 
     @Bean
-    UserDetailsService userDetailsService(
-            @Value("${jdeploy.security.users.ingest.username:}") String ingestUser,
-            @Value("${jdeploy.security.users.ingest.password:}") String ingestPassword,
-            @Value("${jdeploy.security.users.generator.username:}") String generatorUser,
-            @Value("${jdeploy.security.users.generator.password:}") String generatorPassword,
-            @Value("${jdeploy.security.users.reader.username:}") String readerUser,
-            @Value("${jdeploy.security.users.reader.password:}") String readerPassword,
-            @Value("${jdeploy.security.password-policy.enforce:true}") boolean enforcePasswordPolicy,
-            @Value("${jdeploy.security.password-policy.min-length:12}") int minimumPasswordLength,
-            @Value("${jdeploy.security.password-policy.min-character-classes:3}") int minimumCharacterClasses) {
+    UserDetailsService userDetailsService(SecurityCredentialsProperties properties,
+                                          SecurityCredentialPolicyValidator ignoredValidatorDependency) {
 
-        String validatedIngestUser = requireNonBlank(
-                "jdeploy.security.users.ingest.username",
-                "JDEPLOY_INGEST_USER",
-                ingestUser);
-        String validatedIngestPassword = requireStrongPassword(
-                "jdeploy.security.users.ingest.password",
-                "JDEPLOY_INGEST_PASSWORD",
-                ingestPassword,
-                enforcePasswordPolicy,
-                minimumPasswordLength,
-                minimumCharacterClasses);
-        String validatedGeneratorUser = requireNonBlank(
-                "jdeploy.security.users.generator.username",
-                "JDEPLOY_GENERATOR_USER",
-                generatorUser);
-        String validatedGeneratorPassword = requireStrongPassword(
-                "jdeploy.security.users.generator.password",
-                "JDEPLOY_GENERATOR_PASSWORD",
-                generatorPassword,
-                enforcePasswordPolicy,
-                minimumPasswordLength,
-                minimumCharacterClasses);
-        String validatedReaderUser = requireNonBlank(
-                "jdeploy.security.users.reader.username",
-                "JDEPLOY_READER_USER",
-                readerUser);
-        String validatedReaderPassword = requireStrongPassword(
-                "jdeploy.security.users.reader.password",
-                "JDEPLOY_READER_PASSWORD",
-                readerPassword,
-                enforcePasswordPolicy,
-                minimumPasswordLength,
-                minimumCharacterClasses);
+        SecurityCredentialsProperties.Users users = properties.getUsers();
 
         PasswordEncoder encoder = PasswordEncoderFactories.createDelegatingPasswordEncoder();
-        UserDetails ingest = User.withUsername(validatedIngestUser)
-                .password(encoder.encode(validatedIngestPassword))
+        UserDetails ingest = User.withUsername(users.getIngest().getUsername())
+                .password(encoder.encode(users.getIngest().getPassword()))
                 .authorities(ApiRoles.ADMIN, ApiRoles.EDITOR, ApiRoles.TOPOLOGY_INGEST, ApiRoles.ARTIFACT_GENERATE, ApiRoles.READ_ONLY)
                 .build();
-        UserDetails generator = User.withUsername(validatedGeneratorUser)
-                .password(encoder.encode(validatedGeneratorPassword))
+        UserDetails generator = User.withUsername(users.getGenerator().getUsername())
+                .password(encoder.encode(users.getGenerator().getPassword()))
                 .authorities(ApiRoles.EDITOR, ApiRoles.ARTIFACT_GENERATE, ApiRoles.READ_ONLY)
                 .build();
-        UserDetails reader = User.withUsername(validatedReaderUser)
-                .password(encoder.encode(validatedReaderPassword))
+        UserDetails reader = User.withUsername(users.getReader().getUsername())
+                .password(encoder.encode(users.getReader().getPassword()))
                 .authorities(ApiRoles.READ_ONLY)
                 .build();
 
         return new InMemoryUserDetailsManager(ingest, generator, reader);
-    }
-
-    static String requireNonBlank(String propertyName, String environmentVariable, String value) {
-        if (value == null || value.trim().isEmpty()) {
-            throw new IllegalStateException("Missing required security credential '" + propertyName
-                    + "'. Configure it via '" + environmentVariable + "'.");
-        }
-        return value;
-    }
-
-    static String requireStrongPassword(
-            String propertyName,
-            String environmentVariable,
-            String password,
-            boolean enforcePasswordPolicy,
-            int minimumPasswordLength,
-            int minimumCharacterClasses) {
-        String validatedPassword = requireNonBlank(propertyName, environmentVariable, password);
-        if (!enforcePasswordPolicy) {
-            return validatedPassword;
-        }
-
-        if (validatedPassword.length() < minimumPasswordLength) {
-            throw new IllegalStateException("Credential '" + propertyName + "' does not meet password policy: "
-                    + "length must be at least " + minimumPasswordLength + " characters.");
-        }
-
-        int characterClasses = 0;
-        if (validatedPassword.chars().anyMatch(Character::isLowerCase)) {
-            characterClasses++;
-        }
-        if (validatedPassword.chars().anyMatch(Character::isUpperCase)) {
-            characterClasses++;
-        }
-        if (validatedPassword.chars().anyMatch(Character::isDigit)) {
-            characterClasses++;
-        }
-        if (validatedPassword.chars().anyMatch(ch -> !Character.isLetterOrDigit(ch))) {
-            characterClasses++;
-        }
-
-        if (characterClasses < minimumCharacterClasses) {
-            throw new IllegalStateException("Credential '" + propertyName + "' does not meet password policy: "
-                    + "must include at least " + minimumCharacterClasses + " character classes "
-                    + "(lowercase, uppercase, digits, symbols).");
-        }
-
-        return validatedPassword;
     }
 }

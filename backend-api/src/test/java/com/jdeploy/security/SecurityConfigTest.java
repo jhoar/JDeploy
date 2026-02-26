@@ -1,5 +1,6 @@
 package com.jdeploy.security;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -8,25 +9,17 @@ import org.junit.jupiter.api.Test;
 class SecurityConfigTest {
 
     @Test
-    void requireNonBlankRejectsBlankValues() {
-        IllegalStateException error = assertThrows(IllegalStateException.class,
-                () -> SecurityConfig.requireNonBlank("jdeploy.security.users.reader.username", "JDEPLOY_READER_USER", "   "));
+    void validatorRejectsWeakPasswordsWhenPolicyEnabled() {
+        SecurityCredentialsProperties.PasswordPolicy policy = new SecurityCredentialsProperties.PasswordPolicy();
+        policy.setEnforce(true);
+        policy.setMinLength(12);
+        policy.setMinCharacterClasses(3);
 
-        assertEquals(
-                "Missing required security credential 'jdeploy.security.users.reader.username'. Configure it via 'JDEPLOY_READER_USER'.",
-                error.getMessage());
-    }
-
-    @Test
-    void requireStrongPasswordRejectsWeakPasswordsWhenPolicyEnabled() {
         IllegalStateException error = assertThrows(IllegalStateException.class,
-                () -> SecurityConfig.requireStrongPassword(
+                () -> SecurityCredentialPolicyValidator.validatePassword(
                         "jdeploy.security.users.reader.password",
-                        "JDEPLOY_READER_PASSWORD",
                         "weakpass",
-                        true,
-                        12,
-                        3));
+                        policy));
 
         assertEquals(
                 "Credential 'jdeploy.security.users.reader.password' does not meet password policy: length must be at least 12 characters.",
@@ -34,15 +27,31 @@ class SecurityConfigTest {
     }
 
     @Test
-    void requireStrongPasswordAllowsWeakPasswordsWhenPolicyDisabled() {
-        String value = SecurityConfig.requireStrongPassword(
-                "jdeploy.security.users.reader.password",
-                "JDEPLOY_READER_PASSWORD",
-                "weakpass",
-                false,
-                12,
-                3);
+    void validatorAllowsWeakPasswordsWhenPolicyDisabled() {
+        SecurityCredentialsProperties.PasswordPolicy policy = new SecurityCredentialsProperties.PasswordPolicy();
+        policy.setEnforce(false);
 
-        assertEquals("weakpass", value);
+        assertDoesNotThrow(() -> SecurityCredentialPolicyValidator.validatePassword(
+                "jdeploy.security.users.reader.password",
+                "weakpass",
+                policy));
+    }
+
+    @Test
+    void validatorRejectsInsufficientCharacterClasses() {
+        SecurityCredentialsProperties.PasswordPolicy policy = new SecurityCredentialsProperties.PasswordPolicy();
+        policy.setEnforce(true);
+        policy.setMinLength(8);
+        policy.setMinCharacterClasses(3);
+
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> SecurityCredentialPolicyValidator.validatePassword(
+                        "jdeploy.security.users.reader.password",
+                        "alllowercase123",
+                        policy));
+
+        assertEquals(
+                "Credential 'jdeploy.security.users.reader.password' does not meet password policy: must include at least 3 character classes (lowercase, uppercase, digits, symbols).",
+                error.getMessage());
     }
 }
