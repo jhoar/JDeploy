@@ -5,10 +5,9 @@ metadata:
 type: Opaque
 stringData:
   neo4j-password: changeit
-  spring-security-default-password: admin-change-me
-  jdeploy-ingest-password: ingest-password
-  jdeploy-generator-password: generator-password
-  jdeploy-reader-password: reader-password
+  jdeploy-ingest-password: "REPLACE_WITH_STRONG_SECRET"
+  jdeploy-generator-password: "REPLACE_WITH_STRONG_SECRET"
+  jdeploy-reader-password: "REPLACE_WITH_STRONG_SECRET"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -86,13 +85,6 @@ spec:
                 secretKeyRef:
                   name: jdeploy-secrets
                   key: neo4j-password
-            - name: SPRING_SECURITY_DEFAULT_USER
-              value: admin
-            - name: SPRING_SECURITY_DEFAULT_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: jdeploy-secrets
-                  key: spring-security-default-password
             - name: JDEPLOY_INGEST_USER
               value: ingest
             - name: JDEPLOY_INGEST_PASSWORD

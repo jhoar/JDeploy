@@ -1,6 +1,6 @@
 package com.jdeploy.security;
 
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
@@ -16,6 +16,7 @@ import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
 @EnableMethodSecurity
+@EnableConfigurationProperties(SecurityCredentialsProperties.class)
 public class SecurityConfig {
 
     @Bean
@@ -35,25 +36,22 @@ public class SecurityConfig {
     }
 
     @Bean
-    UserDetailsService userDetailsService(
-            @Value("${jdeploy.security.users.ingest.username:ingest}") String ingestUser,
-            @Value("${jdeploy.security.users.ingest.password:ingest-password}") String ingestPassword,
-            @Value("${jdeploy.security.users.generator.username:generator}") String generatorUser,
-            @Value("${jdeploy.security.users.generator.password:generator-password}") String generatorPassword,
-            @Value("${jdeploy.security.users.reader.username:reader}") String readerUser,
-            @Value("${jdeploy.security.users.reader.password:reader-password}") String readerPassword) {
+    UserDetailsService userDetailsService(SecurityCredentialsProperties properties,
+                                          SecurityCredentialPolicyValidator ignoredValidatorDependency) {
+
+        SecurityCredentialsProperties.Users users = properties.getUsers();
 
         PasswordEncoder encoder = PasswordEncoderFactories.createDelegatingPasswordEncoder();
-        UserDetails ingest = User.withUsername(ingestUser)
-                .password(encoder.encode(ingestPassword))
+        UserDetails ingest = User.withUsername(users.getIngest().getUsername())
+                .password(encoder.encode(users.getIngest().getPassword()))
                 .authorities(ApiRoles.ADMIN, ApiRoles.EDITOR, ApiRoles.TOPOLOGY_INGEST, ApiRoles.ARTIFACT_GENERATE, ApiRoles.READ_ONLY)
                 .build();
-        UserDetails generator = User.withUsername(generatorUser)
-                .password(encoder.encode(generatorPassword))
+        UserDetails generator = User.withUsername(users.getGenerator().getUsername())
+                .password(encoder.encode(users.getGenerator().getPassword()))
                 .authorities(ApiRoles.EDITOR, ApiRoles.ARTIFACT_GENERATE, ApiRoles.READ_ONLY)
                 .build();
-        UserDetails reader = User.withUsername(readerUser)
-                .password(encoder.encode(readerPassword))
+        UserDetails reader = User.withUsername(users.getReader().getUsername())
+                .password(encoder.encode(users.getReader().getPassword()))
                 .authorities(ApiRoles.READ_ONLY)
                 .build();
 

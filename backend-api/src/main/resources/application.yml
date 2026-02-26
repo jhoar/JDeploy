@@ -7,11 +7,6 @@ spring:
       username: ${NEO4J_USERNAME:neo4j}
       password: ${NEO4J_PASSWORD:changeit}
 
-  security:
-    user:
-      name: ${SPRING_SECURITY_DEFAULT_USER:admin}
-      password: ${SPRING_SECURITY_DEFAULT_PASSWORD:admin-change-me}
-      roles: ADMIN
 
 management:
   endpoints:
@@ -47,13 +42,17 @@ jdeploy:
     enabled: ${JDEPLOY_QUALITY_REPORTING_ENABLED:true}
     cron: ${JDEPLOY_QUALITY_REPORTING_CRON:0 */15 * * * *}
   security:
+    password-policy:
+      enforce: ${JDEPLOY_SECURITY_PASSWORD_POLICY_ENFORCE:true}
+      min-length: ${JDEPLOY_SECURITY_PASSWORD_POLICY_MIN_LENGTH:12}
+      min-character-classes: ${JDEPLOY_SECURITY_PASSWORD_POLICY_MIN_CHARACTER_CLASSES:3}
     users:
       ingest:
-        username: ${JDEPLOY_INGEST_USER:ingest}
-        password: ${JDEPLOY_INGEST_PASSWORD:ingest-password}
+        username: ${JDEPLOY_INGEST_USER}
+        password: ${JDEPLOY_INGEST_PASSWORD}
       generator:
-        username: ${JDEPLOY_GENERATOR_USER:generator}
-        password: ${JDEPLOY_GENERATOR_PASSWORD:generator-password}
+        username: ${JDEPLOY_GENERATOR_USER}
+        password: ${JDEPLOY_GENERATOR_PASSWORD}
       reader:
-        username: ${JDEPLOY_READER_USER:reader}
-        password: ${JDEPLOY_READER_PASSWORD:reader-password}
+        username: ${JDEPLOY_READER_USER}
+        password: ${JDEPLOY_READER_PASSWORD}
