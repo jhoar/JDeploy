@@ -21,6 +21,11 @@ public class SecurityCredentialPolicyValidator {
             return;
         }
 
+        if (password == null || password.isBlank()) {
+            throw new IllegalStateException("Credential '" + propertyName + "' is not configured. "
+                    + "Set the corresponding JDEPLOY_*_PASSWORD environment variable.");
+        }
+
         if (password.length() < policy.getMinLength()) {
             throw new IllegalStateException("Credential '" + propertyName + "' does not meet password policy: "
                     + "length must be at least " + policy.getMinLength() + " characters.");

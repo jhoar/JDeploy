@@ -54,4 +54,20 @@ class SecurityConfigTest {
                 "Credential 'jdeploy.security.users.reader.password' does not meet password policy: must include at least 3 character classes (lowercase, uppercase, digits, symbols).",
                 error.getMessage());
     }
+
+    @Test
+    void validatorRejectsNullPasswordWithHelpfulError() {
+        SecurityCredentialsProperties.PasswordPolicy policy = new SecurityCredentialsProperties.PasswordPolicy();
+        policy.setEnforce(true);
+
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> SecurityCredentialPolicyValidator.validatePassword(
+                        "jdeploy.security.users.reader.password",
+                        null,
+                        policy));
+
+        assertEquals(
+                "Credential 'jdeploy.security.users.reader.password' is not configured. Set the corresponding JDEPLOY_*_PASSWORD environment variable.",
+                error.getMessage());
+    }
 }
