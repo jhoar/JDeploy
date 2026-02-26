@@ -147,6 +147,20 @@ Start everything:
 docker compose up --build -d
 ```
 
+> [!IMPORTANT]
+> Use Docker Compose **v2** (`docker compose ...`) instead of the legacy Python-based
+> `docker-compose` v1 binary. Some Docker Engine versions can fail with a traceback like
+> `KeyError: 'ContainerConfig'` when recreating containers via `docker-compose` v1.
+>
+> If you hit this error, switch to `docker compose` and remove stale containers before
+> retrying:
+>
+> ```bash
+> docker compose down --remove-orphans
+> docker rm -f jdeploy-backend-api jdeploy-neo4j 2>/dev/null || true
+> docker compose up --build -d
+> ```
+
 Stop:
 
 ```bash
