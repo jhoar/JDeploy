@@ -19,6 +19,11 @@ import jakarta.servlet.http.HttpServletRequest;
 public class ApiClientBeans {
 
     @Bean
+    RestClient.Builder restClientBuilder() {
+        return RestClient.builder();
+    }
+
+    @Bean
     RestClient restClient(RestClient.Builder builder, ApiClientConfiguration config) {
         return builder
                 .baseUrl(config.baseUrl())
