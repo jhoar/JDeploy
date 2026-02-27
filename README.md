@@ -34,7 +34,7 @@ mvn -pl vaadin-ui spring-boot:run
 Run packaged UI jar:
 
 ```bash
-java -jar vaadin-ui/target/vaadin-ui-0.0.1-SNAPSHOT.jar
+java -jar vaadin-ui/target/vaadin-ui-0.0.2.jar
 ```
 
 By default, the UI is served on `http://localhost:8081` and uses Spring Security login.
@@ -126,12 +126,12 @@ mvn -pl backend-api -am clean package
 
 The executable artifact is generated at:
 
-- `backend-api/target/backend-api-0.0.1-SNAPSHOT.jar`
+- `backend-api/target/backend-api-0.0.2.jar`
 
 Run it locally:
 
 ```bash
-java -jar backend-api/target/backend-api-0.0.1-SNAPSHOT.jar
+java -jar backend-api/target/backend-api-0.0.2.jar
 ```
 
 ## Containerized startup (Docker Compose)
@@ -255,7 +255,7 @@ The backend now exposes a Picocli-based CLI surface that runs in-process against
 Use the `cli` profile and enable CLI execution:
 
 ```bash
-java -jar backend-api/target/backend-api-0.0.1-SNAPSHOT.jar \
+java -jar backend-api/target/backend-api-0.0.2.jar \
   --spring.profiles.active=cli \
   --jdeploy.cli.enabled=true \
   ingest-manifest --file backend-api/src/test/resources/manifests/heterogeneous-topology.yaml
@@ -268,7 +268,7 @@ java -jar backend-api/target/backend-api-0.0.1-SNAPSHOT.jar \
 Ingests a YAML manifest via `ManifestIngestionService`.
 
 ```bash
-java -jar backend-api/target/backend-api-0.0.1-SNAPSHOT.jar \
+java -jar backend-api/target/backend-api-0.0.2.jar \
   --spring.profiles.active=cli --jdeploy.cli.enabled=true \
   ingest-manifest --file ./manifest.yml
 ```
@@ -278,7 +278,7 @@ java -jar backend-api/target/backend-api-0.0.1-SNAPSHOT.jar \
 Queries deployments mapped to nodes in the subnet via `TopologyQueryService`.
 
 ```bash
-java -jar backend-api/target/backend-api-0.0.1-SNAPSHOT.jar \
+java -jar backend-api/target/backend-api-0.0.2.jar \
   --spring.profiles.active=cli --jdeploy.cli.enabled=true \
   deployments-by-subnet --subnet 10.0.1.0/24 --format JSON
 ```
@@ -288,7 +288,7 @@ java -jar backend-api/target/backend-api-0.0.1-SNAPSHOT.jar \
 Queries dependency impact records for the node via `TopologyQueryService`.
 
 ```bash
-java -jar backend-api/target/backend-api-0.0.1-SNAPSHOT.jar \
+java -jar backend-api/target/backend-api-0.0.2.jar \
   --spring.profiles.active=cli --jdeploy.cli.enabled=true \
   impact-by-node --node app-node-01 --format TEXT
 ```
@@ -298,7 +298,7 @@ java -jar backend-api/target/backend-api-0.0.1-SNAPSHOT.jar \
 Generates a PlantUML system deployment diagram and writes it to disk.
 
 ```bash
-java -jar backend-api/target/backend-api-0.0.1-SNAPSHOT.jar \
+java -jar backend-api/target/backend-api-0.0.2.jar \
   --spring.profiles.active=cli --jdeploy.cli.enabled=true \
   generate-diagram --system billing --output ./artifacts/billing.puml
 ```
@@ -323,7 +323,7 @@ export JDEPLOY_CLI_AUTH_MODE=service-account
 export JDEPLOY_CLI_AUTH_USER=cli-service
 export JDEPLOY_CLI_AUTH_PASSWORD=change-me
 
-java -jar backend-api/target/backend-api-0.0.1-SNAPSHOT.jar \
+java -jar backend-api/target/backend-api-0.0.2.jar \
   --spring.profiles.active=cli --jdeploy.cli.enabled=true \
   ingest-manifest --file ./manifest.yml --auth-user cli-service --auth-password change-me
 ```
