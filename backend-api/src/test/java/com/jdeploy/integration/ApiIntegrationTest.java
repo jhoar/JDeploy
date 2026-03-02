@@ -2,6 +2,8 @@ package com.jdeploy.integration;
 
 import com.jdeploy.JDeployApplication;
 import com.jdeploy.api.ManifestController;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,9 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.support.BasicAuthenticationInterceptor;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.Neo4jContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.containers.GenericContainer;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -35,17 +35,26 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Testcontainers
 @SpringBootTest(classes = JDeployApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class ApiIntegrationTest {
 
-    @Container
-    static Neo4jContainer<?> neo4j = new Neo4jContainer<>("neo4j:5")
-            .withAdminPassword("changeit");
+    static GenericContainer<?> neo4j = new GenericContainer<>("neo4j:5")
+            .withExposedPorts(7687)
+            .withEnv("NEO4J_AUTH", "neo4j/changeit");
+
+    @BeforeAll
+    static void startNeo4jContainer() {
+        neo4j.start();
+    }
+
+    @AfterAll
+    static void stopNeo4jContainer() {
+        neo4j.stop();
+    }
 
     @DynamicPropertySource
     static void neo4jProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.neo4j.uri", neo4j::getBoltUrl);
+        registry.add("spring.neo4j.uri", () -> "bolt://" + neo4j.getHost() + ":" + neo4j.getMappedPort(7687));
         registry.add("spring.neo4j.authentication.username", () -> "neo4j");
         registry.add("spring.neo4j.authentication.password", () -> "changeit");
         registry.add("jdeploy.security.users.ingest.username", () -> "ingest");
