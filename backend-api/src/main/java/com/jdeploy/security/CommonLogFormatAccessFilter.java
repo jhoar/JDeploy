@@ -49,7 +49,13 @@ public class CommonLogFormatAccessFilter extends OncePerRequestFilter {
     }
 
     private static String contentLength(HttpServletResponse response) {
-        return sanitizeForLog(response.getHeader(HttpHeaders.CONTENT_LENGTH));
+        String value = response.getHeader(HttpHeaders.CONTENT_LENGTH);
+        if (value == null || value.isBlank()) {
+            return "-";
+        }
+
+        String digitsOnly = value.replaceAll("\\D", "");
+        return digitsOnly.isBlank() ? "-" : digitsOnly;
     }
 
     private static String buildRequestLine(HttpServletRequest request) {

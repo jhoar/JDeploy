@@ -2,10 +2,14 @@ package com.jdeploy.security;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -73,14 +77,14 @@ class CommonLogFormatAccessFilterTest {
         request.setRemoteAddr("203.0.113.5\r\nforged");
         request.addParameter("username", "alice\nadmin");
 
-        MockHttpServletResponse response = new MockHttpServletResponse();
-        response.setStatus(401);
-        response.setHeader("Content-Length", "12\r\n999");
+        HttpServletResponse response = mock(HttpServletResponse.class);
+        when(response.getStatus()).thenReturn(401);
+        when(response.getHeader("Content-Length")).thenReturn("12\r\n999");
 
         String line = CommonLogFormatAccessFilter.buildCommonLogEntry(request, response);
 
         assertTrue(line.contains("203.0.113.5  forged - alice admin"));
-        assertTrue(line.contains("\"POST /login?next=/topology  second=true HTTP/1.1\" 401 12  999"));
+        assertTrue(line.contains("\"POST /login?next=/topology  second=true HTTP/1.1\" 401 12999"));
         assertTrue(!line.contains("\n") && !line.contains("\r"));
     }
 }
