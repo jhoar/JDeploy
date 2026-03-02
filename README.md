@@ -28,6 +28,7 @@ mvn -pl vaadin-ui -am clean package
 Run the UI directly from Maven:
 
 ```bash
+mvn -pl vaadin-ui -am -DskipTests install
 mvn -pl vaadin-ui spring-boot:run
 ```
 
