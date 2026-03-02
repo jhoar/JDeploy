@@ -60,3 +60,8 @@ jdeploy:
       reader:
         username: ${JDEPLOY_READER_USER}
         password: ${JDEPLOY_READER_PASSWORD}
+
+  debug:
+    credentials:
+      enabled: ${JDEPLOY_DEBUG_CREDENTIALS_ENABLED:false}
+
