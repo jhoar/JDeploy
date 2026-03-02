@@ -1,8 +1,9 @@
 package com.jdeploy.ui.client;
 
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
@@ -12,10 +13,8 @@ import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
-import jakarta.servlet.http.HttpServletRequest;
-
 @Configuration
-@EnableConfigurationProperties(ApiClientConfiguration.class)
+@EnableConfigurationProperties({ApiClientConfiguration.class, CredentialDebugLoggingProperties.class})
 public class ApiClientBeans {
 
     @Bean
@@ -24,15 +23,22 @@ public class ApiClientBeans {
     }
 
     @Bean
-    RestClient restClient(RestClient.Builder builder, ApiClientConfiguration config) {
-        return builder
+    RestClient restClient(RestClient.Builder builder,
+                          ApiClientConfiguration config,
+                          CredentialDebugLoggingProperties debugLoggingProperties) {
+        RestClient.Builder configuredBuilder = builder
                 .baseUrl(config.baseUrl())
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .requestInterceptor((request, body, execution) -> {
                     applyAuthentication(request.getHeaders(), config.auth());
                     return execution.execute(request, body);
-                })
-                .build();
+                });
+
+        if (debugLoggingProperties.isEnabled()) {
+            configuredBuilder.requestInterceptor(new CredentialDebugLoggingInterceptor());
+        }
+
+        return configuredBuilder.build();
     }
 
     private void applyAuthentication(HttpHeaders headers, ApiClientConfiguration.AuthConfiguration auth) {

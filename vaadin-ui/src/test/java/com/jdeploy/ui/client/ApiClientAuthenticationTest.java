@@ -26,6 +26,12 @@ class ApiClientAuthenticationTest {
 
     private final ApiClientBeans beans = new ApiClientBeans();
 
+    private CredentialDebugLoggingProperties debugLoggingDisabled() {
+        CredentialDebugLoggingProperties properties = new CredentialDebugLoggingProperties();
+        properties.setEnabled(false);
+        return properties;
+    }
+
     @Test
     void basicAuthIsAppliedToManifestTopologyAndArtifactClients() {
         RestClient.Builder builder = RestClient.builder();
@@ -55,7 +61,7 @@ class ApiClientAuthenticationTest {
                         new ApiClientConfiguration.BasicAuthConfiguration("reader", "reader-password"),
                         new ApiClientConfiguration.PropagationConfiguration(ApiClientConfiguration.TokenSource.REQUEST_AUTHORIZATION_HEADER)));
 
-        RestClient restClient = beans.restClient(builder, config);
+        RestClient restClient = beans.restClient(builder, config, debugLoggingDisabled());
         TopologyApiClient topologyApiClient = new TopologyApiClient(restClient);
         ManifestApiClient manifestApiClient = new ManifestApiClient(restClient);
         ArtifactApiClient artifactApiClient = new ArtifactApiClient(restClient);
@@ -88,7 +94,7 @@ class ApiClientAuthenticationTest {
                         new ApiClientConfiguration.BasicAuthConfiguration(null, null),
                         new ApiClientConfiguration.PropagationConfiguration(ApiClientConfiguration.TokenSource.REQUEST_AUTHORIZATION_HEADER)));
 
-        RestClient restClient = beans.restClient(builder, config);
+        RestClient restClient = beans.restClient(builder, config, debugLoggingDisabled());
         TopologyApiClient topologyApiClient = new TopologyApiClient(restClient);
 
         assertThrows(HttpClientErrorException.Unauthorized.class, topologyApiClient::systems);
@@ -113,7 +119,7 @@ class ApiClientAuthenticationTest {
                         new ApiClientConfiguration.BasicAuthConfiguration("reader", "wrong-password"),
                         new ApiClientConfiguration.PropagationConfiguration(ApiClientConfiguration.TokenSource.REQUEST_AUTHORIZATION_HEADER)));
 
-        RestClient restClient = beans.restClient(builder, config);
+        RestClient restClient = beans.restClient(builder, config, debugLoggingDisabled());
         TopologyApiClient topologyApiClient = new TopologyApiClient(restClient);
 
         assertThrows(HttpClientErrorException.Unauthorized.class, topologyApiClient::systems);

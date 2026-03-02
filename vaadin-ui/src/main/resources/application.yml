@@ -11,3 +11,8 @@ jdeploy:
         password: ${JDEPLOY_BACKEND_AUTH_PASSWORD:reader-password}
       propagation:
         source: ${JDEPLOY_BACKEND_AUTH_PROPAGATION_SOURCE:REQUEST_AUTHORIZATION_HEADER}
+
+
+  debug:
+    credentials:
+      enabled: ${JDEPLOY_DEBUG_CREDENTIALS_ENABLED:false}

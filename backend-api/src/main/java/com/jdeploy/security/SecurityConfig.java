@@ -1,5 +1,7 @@
 package com.jdeploy.security;
 
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,12 +19,13 @@ import org.springframework.security.web.authentication.www.BasicAuthenticationFi
 
 @Configuration
 @EnableMethodSecurity
-@EnableConfigurationProperties(SecurityCredentialsProperties.class)
+@EnableConfigurationProperties({SecurityCredentialsProperties.class, CredentialDebugLoggingProperties.class})
 public class SecurityConfig {
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        return http
+    SecurityFilterChain securityFilterChain(HttpSecurity http,
+                                            ObjectProvider<CredentialDebugLoggingFilter> credentialDebugLoggingFilterProvider) throws Exception {
+        http
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/openapi.json", "/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
@@ -33,13 +36,25 @@ public class SecurityConfig {
                         .requestMatchers("/api/**").hasAnyAuthority(ApiRoles.READ_ONLY, ApiRoles.EDITOR, ApiRoles.ADMIN)
                         .anyRequest().authenticated())
                 .httpBasic(Customizer.withDefaults())
-                .addFilterAfter(commonLogFormatAccessFilter(), BasicAuthenticationFilter.class)
-                .build();
+                .addFilterAfter(commonLogFormatAccessFilter(), BasicAuthenticationFilter.class);
+
+        CredentialDebugLoggingFilter credentialDebugLoggingFilter = credentialDebugLoggingFilterProvider.getIfAvailable();
+        if (credentialDebugLoggingFilter != null) {
+            http.addFilterAfter(credentialDebugLoggingFilter, BasicAuthenticationFilter.class);
+        }
+
+        return http.build();
     }
 
     @Bean
     CommonLogFormatAccessFilter commonLogFormatAccessFilter() {
         return new CommonLogFormatAccessFilter();
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "jdeploy.debug.credentials", name = "enabled", havingValue = "true")
+    CredentialDebugLoggingFilter credentialDebugLoggingFilter() {
+        return new CredentialDebugLoggingFilter();
     }
 
     @Bean
