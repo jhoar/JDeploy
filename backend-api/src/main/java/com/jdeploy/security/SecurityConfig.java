@@ -13,6 +13,7 @@ import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
 
 @Configuration
 @EnableMethodSecurity
@@ -32,7 +33,13 @@ public class SecurityConfig {
                         .requestMatchers("/api/**").hasAnyAuthority(ApiRoles.READ_ONLY, ApiRoles.EDITOR, ApiRoles.ADMIN)
                         .anyRequest().authenticated())
                 .httpBasic(Customizer.withDefaults())
+                .addFilterAfter(commonLogFormatAccessFilter(), BasicAuthenticationFilter.class)
                 .build();
+    }
+
+    @Bean
+    CommonLogFormatAccessFilter commonLogFormatAccessFilter() {
+        return new CommonLogFormatAccessFilter();
     }
 
     @Bean
