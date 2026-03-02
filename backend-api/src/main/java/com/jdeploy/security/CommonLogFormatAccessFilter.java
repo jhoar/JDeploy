@@ -33,9 +33,9 @@ public class CommonLogFormatAccessFilter extends OncePerRequestFilter {
     }
 
     static String buildCommonLogEntry(HttpServletRequest request, HttpServletResponse response) {
-        String remoteHost = defaultValue(request.getRemoteAddr());
+        String remoteHost = sanitizeForLog(request.getRemoteAddr());
         String authUser = currentUser(request);
-        String requestLine = buildRequestLine(request);
+        String requestLine = sanitizeForLog(buildRequestLine(request));
         String timestamp = ZonedDateTime.now(ZoneId.systemDefault()).format(COMMON_LOG_DATE_FORMAT);
         String bytesSent = contentLength(response);
 
@@ -49,11 +49,7 @@ public class CommonLogFormatAccessFilter extends OncePerRequestFilter {
     }
 
     private static String contentLength(HttpServletResponse response) {
-        String contentLength = response.getHeader(HttpHeaders.CONTENT_LENGTH);
-        if (contentLength == null || contentLength.isBlank()) {
-            return "-";
-        }
-        return contentLength;
+        return sanitizeForLog(response.getHeader(HttpHeaders.CONTENT_LENGTH));
     }
 
     private static String buildRequestLine(HttpServletRequest request) {
@@ -65,11 +61,11 @@ public class CommonLogFormatAccessFilter extends OncePerRequestFilter {
     private static String currentUser(HttpServletRequest request) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.isAuthenticated() && !(authentication instanceof AnonymousAuthenticationToken)) {
-            return defaultValue(authentication.getName());
+            return sanitizeForLog(authentication.getName());
         }
 
         if (isLoginAttempt(request)) {
-            return defaultValue(request.getParameter("username"));
+            return sanitizeForLog(request.getParameter("username"));
         }
 
         return "-";
@@ -81,5 +77,24 @@ public class CommonLogFormatAccessFilter extends OncePerRequestFilter {
 
     private static String defaultValue(String value) {
         return (value == null || value.isBlank()) ? "-" : value;
+    }
+
+    private static String sanitizeForLog(String value) {
+        String normalized = defaultValue(value);
+        if ("-".equals(normalized)) {
+            return normalized;
+        }
+
+        StringBuilder sanitized = new StringBuilder(normalized.length());
+        for (int i = 0; i < normalized.length(); i++) {
+            char current = normalized.charAt(i);
+            if (current == '\r' || current == '\n' || Character.isISOControl(current)) {
+                sanitized.append(' ');
+            } else {
+                sanitized.append(current);
+            }
+        }
+
+        return sanitized.toString();
     }
 }

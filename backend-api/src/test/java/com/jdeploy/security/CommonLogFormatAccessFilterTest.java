@@ -64,4 +64,23 @@ class CommonLogFormatAccessFilterTest {
 
         assertTrue(line.matches("198\\.51\\.100\\.15 - - \\[.+] \\\"POST /login HTTP/1\\.1\\\" 401 -"));
     }
+
+    @Test
+    void sanitizesUserControlledValuesToPreventLogInjection() {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/login");
+        request.setQueryString("next=/topology\r\nsecond=true");
+        request.setProtocol("HTTP/1.1");
+        request.setRemoteAddr("203.0.113.5\r\nforged");
+        request.addParameter("username", "alice\nadmin");
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        response.setStatus(401);
+        response.setHeader("Content-Length", "12\r\n999");
+
+        String line = CommonLogFormatAccessFilter.buildCommonLogEntry(request, response);
+
+        assertTrue(line.contains("203.0.113.5  forged - alice admin"));
+        assertTrue(line.contains("\"POST /login?next=/topology  second=true HTTP/1.1\" 401 12  999"));
+        assertTrue(!line.contains("\n") && !line.contains("\r"));
+    }
 }
