@@ -73,6 +73,34 @@ class JDeployCliCommandsTest {
         verify(ingestionService).synchronize(any(DeploymentManifestDto.class));
     }
 
+
+    @Test
+    void forwardedCliArgs_prefersArgsAfterSeparator() {
+        List<String> forwarded = JDeployCliCommands.Runner.forwardedCliArgs(new String[]{
+                "--spring.profiles.active=cli",
+                "--jdeploy.cli.enabled=true",
+                "--",
+                "ingest-manifest",
+                "--file",
+                "manifest.yml"
+        });
+
+        assertEquals(List.of("ingest-manifest", "--file", "manifest.yml"), forwarded);
+    }
+
+    @Test
+    void forwardedCliArgs_filtersKnownSpringBootArgsWithoutSeparator() {
+        List<String> forwarded = JDeployCliCommands.Runner.forwardedCliArgs(new String[]{
+                "--spring.profiles.active=cli",
+                "--jdeploy.cli.enabled=true",
+                "ingest-manifest",
+                "--file",
+                "manifest.yml"
+        });
+
+        assertEquals(List.of("ingest-manifest", "--file", "manifest.yml"), forwarded);
+    }
+
     private CommandLine commandLine() {
         ManifestIngestionService ingestionService = mock(ManifestIngestionService.class);
         TopologyQueryService topologyQueryService = mock(TopologyQueryService.class);
