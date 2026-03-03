@@ -70,6 +70,7 @@ Unauthenticated callers must receive `401 Unauthorized` for these routes. This c
 Required/important properties:
 
 - `jdeploy.backend.base-url` (env: `JDEPLOY_BACKEND_BASE_URL`) — backend API URL (default `http://localhost:8080`).
+- `server.port` (env: `SERVER_PORT`) — Vaadin UI HTTP port (default `8081`).
 - `jdeploy.backend.auth.mode` (env: `JDEPLOY_BACKEND_AUTH_MODE`) — one of:
   - `BASIC` (default): UI uses configured service credentials for every outbound backend call.
   - `PROPAGATE`: UI forwards auth/session from the current logged-in request context.
@@ -211,8 +212,14 @@ The backend reads environment variables from `backend-api/src/main/resources/app
 | `JDEPLOY_READER_USER` | _required_ | Read-only role username |
 | `JDEPLOY_READER_PASSWORD` | _required secret_ | Read-only role password |
 | `JDEPLOY_UML_OUTPUT_PATH` | profile-specific path | PlantUML output directory |
+| `JDEPLOY_ARTIFACT_CLEANUP_INTERVAL` | `PT15M` | Artifact cleanup schedule interval (ISO-8601 duration) |
+| `JDEPLOY_ARTIFACT_CLEANUP_INITIAL_DELAY` | `PT1M` | Initial delay before artifact cleanup starts (ISO-8601 duration) |
+| `JDEPLOY_ARTIFACT_CLEANUP_RETENTION_GRACE_PERIOD` | `PT0S` | Extra retention window before cleanup deletes artifacts |
 | `JDEPLOY_QUALITY_REPORTING_ENABLED` | `true` | Enables quality reporting scheduler |
 | `JDEPLOY_QUALITY_REPORTING_CRON` | `0 */15 * * * *` | Scheduler cron |
+| `JDEPLOY_DEBUG_CREDENTIALS_ENABLED` | `false` | Enables credential-debug logging hooks (non-production troubleshooting only) |
+| `JDEPLOY_CLI_ENABLED` | `true` (`cli` profile) | Enables CLI command registration in CLI profile |
+| `SERVER_PORT` | `8081` (`vaadin-ui`) | Vaadin UI HTTP port |
 
 
 ### Required backend auth credentials
