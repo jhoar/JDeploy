@@ -260,12 +260,14 @@ The backend now exposes a Picocli-based CLI surface that runs in-process against
 
 ### Start CLI mode
 
-Use the `cli` profile and enable CLI execution:
+Use the `cli` profile and enable CLI execution.
+
+> Use `--` to separate Spring Boot application arguments from JDeploy CLI command arguments.
 
 ```bash
 java -jar backend-api/target/backend-api-0.0.2.jar \
   --spring.profiles.active=cli \
-  --jdeploy.cli.enabled=true \
+  --jdeploy.cli.enabled=true -- \
   ingest-manifest --file backend-api/src/test/resources/manifests/heterogeneous-topology.yaml
 ```
 
@@ -277,7 +279,7 @@ Ingests a YAML manifest via `ManifestIngestionService`.
 
 ```bash
 java -jar backend-api/target/backend-api-0.0.2.jar \
-  --spring.profiles.active=cli --jdeploy.cli.enabled=true \
+  --spring.profiles.active=cli --jdeploy.cli.enabled=true -- \
   ingest-manifest --file ./manifest.yml
 ```
 
@@ -287,7 +289,7 @@ Queries deployments mapped to nodes in the subnet via `TopologyQueryService`.
 
 ```bash
 java -jar backend-api/target/backend-api-0.0.2.jar \
-  --spring.profiles.active=cli --jdeploy.cli.enabled=true \
+  --spring.profiles.active=cli --jdeploy.cli.enabled=true -- \
   deployments-by-subnet --subnet 10.0.1.0/24 --format JSON
 ```
 
@@ -297,7 +299,7 @@ Queries dependency impact records for the node via `TopologyQueryService`.
 
 ```bash
 java -jar backend-api/target/backend-api-0.0.2.jar \
-  --spring.profiles.active=cli --jdeploy.cli.enabled=true \
+  --spring.profiles.active=cli --jdeploy.cli.enabled=true -- \
   impact-by-node --node app-node-01 --format TEXT
 ```
 
@@ -307,7 +309,7 @@ Generates a PlantUML system deployment diagram and writes it to disk.
 
 ```bash
 java -jar backend-api/target/backend-api-0.0.2.jar \
-  --spring.profiles.active=cli --jdeploy.cli.enabled=true \
+  --spring.profiles.active=cli --jdeploy.cli.enabled=true -- \
   generate-diagram --system billing --output ./artifacts/billing.puml
 ```
 
@@ -332,7 +334,7 @@ export JDEPLOY_CLI_AUTH_USER=cli-service
 export JDEPLOY_CLI_AUTH_PASSWORD=change-me
 
 java -jar backend-api/target/backend-api-0.0.2.jar \
-  --spring.profiles.active=cli --jdeploy.cli.enabled=true \
+  --spring.profiles.active=cli --jdeploy.cli.enabled=true -- \
   ingest-manifest --file ./manifest.yml --auth-user cli-service --auth-password change-me
 ```
 

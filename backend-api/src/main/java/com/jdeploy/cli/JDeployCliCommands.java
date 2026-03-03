@@ -197,10 +197,7 @@ public class JDeployCliCommands implements Runnable {
             if (!Boolean.parseBoolean(environment.getProperty("jdeploy.cli.enabled", "false"))) {
                 return;
             }
-            String[] raw = args.getSourceArgs();
-            List<String> forwarded = java.util.Arrays.stream(raw)
-                    .filter(arg -> !arg.startsWith("--jdeploy.cli.enabled="))
-                    .toList();
+            List<String> forwarded = forwardedCliArgs(args.getSourceArgs());
             CommandLine commandLine = new CommandLine(root, factory);
             commandLine.setErr(new PrintWriter(System.err, true));
             int exit = commandLine.execute(forwarded.toArray(String[]::new));
@@ -208,6 +205,18 @@ public class JDeployCliCommands implements Runnable {
                 throw new IllegalStateException("CLI command failed with exit code " + exit);
             }
             System.exit(0);
+        }
+
+        static List<String> forwardedCliArgs(String[] sourceArgs) {
+            int separator = java.util.Arrays.asList(sourceArgs).indexOf("--");
+            if (separator >= 0 && separator + 1 < sourceArgs.length) {
+                return java.util.Arrays.asList(sourceArgs).subList(separator + 1, sourceArgs.length);
+            }
+            return java.util.Arrays.stream(sourceArgs)
+                    .filter(arg -> !arg.startsWith("--jdeploy.cli.enabled="))
+                    .filter(arg -> !arg.startsWith("--spring."))
+                    .filter(arg -> !arg.startsWith("--server."))
+                    .toList();
         }
     }
 }
