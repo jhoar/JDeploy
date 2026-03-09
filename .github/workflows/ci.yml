@@ -103,7 +103,7 @@ jobs:
 
       - name: JUnit summary and annotations
         if: always()
-        uses: mikepenz/action-junit-report@v4
+        uses: mikepenz/action-junit-report@v6
         with:
           report_paths: |
             ${{ matrix.module }}/target/surefire-reports/*.xml
@@ -197,7 +197,7 @@ jobs:
 
       - name: Integration JUnit summary and annotations
         if: always()
-        uses: mikepenz/action-junit-report@v4
+        uses: mikepenz/action-junit-report@v6
         with:
           report_paths: |
             backend-api/target/surefire-reports/*.xml
