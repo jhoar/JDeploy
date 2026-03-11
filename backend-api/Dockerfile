@@ -11,7 +11,7 @@ COPY backend-api/src backend-api/src
 RUN mvn -pl backend-api -am -DskipTests package
 RUN find /workspace/backend-api/target -maxdepth 1 -type f -name 'backend-api-*.jar' ! -name '*.original' -exec cp {} /workspace/backend-api/target/app.jar \;
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:25-jre
 WORKDIR /app
 
 COPY --from=build /workspace/backend-api/target/app.jar /app/app.jar
